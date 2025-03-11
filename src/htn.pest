@@ -1,0 +1,18 @@
+WHITESPACE = _{ " " | "\t" | "\n" }
+
+task                   =  { "task" ~ STRING ~ "{" ~ statement* ~ "}" }
+statement              = _{ precondition_statement | effect_statement | task }
+precondition_statement =  { "precondition:" ~ condition ~ ";" }
+effect_statement       =  { "effect:" ~ effect ~ ";" }
+
+condition  = { identifier ~ operator ~ value }
+operator   = { ">" | "==" }
+effect     = { set_effect | inc_effect }
+set_effect = { "set" ~ identifier ~ "=" ~ value }
+inc_effect = { "inc" ~ identifier ~ "by" ~ value }
+
+identifier = @{ ASCII_ALPHANUMERIC+ }
+value      = @{ ("true" | "false") | ASCII_DIGIT+ }
+STRING     = @{ "\"" ~ ((!"\"" ~ ANY))* ~ "\"" }
+
+htn = { SOI ~ WHITESPACE* ~ task+ ~ WHITESPACE* ~ EOI }
