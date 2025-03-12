@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, reflect::TypeRegistry};
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 use std::marker::PhantomData;
@@ -94,6 +94,8 @@ impl Effect {
 #[derive(Clone, Debug, Reflect)]
 pub struct Task<T: Reflect> {
     pub name: String,
+    pub operator_type: Option<String>,
+    pub operator_params: Vec<String>,
     pub preconditions: Vec<Condition>,
     pub effects: Vec<Effect>,
     pub subtasks: Vec<Task<T>>,
@@ -104,21 +106,58 @@ impl<T: Reflect> Task<T> {
     pub fn builder(name: impl Into<String>) -> TaskBuilder<T> {
         TaskBuilder {
             name: name.into(),
+            operator_type: None,
+            operator_params: Vec::new(),
             preconditions: Vec::new(),
             effects: Vec::new(),
             subtasks: Vec::new(),
         }
     }
+
+    pub fn create_operator(
+        &self,
+        state: &T,
+        type_registry: &TypeRegistry,
+    ) -> Option<Box<dyn Reflect>> {
+        let op_type = self.operator_type.as_ref()?;
+
+        let registration = type_registry.get_with_name(op_type)?;
+
+        let mut component = registration.data::<ReflectComponent>()?.spawn();
+
+        if let Some(param_field) = self.operator_params.first() {
+            if let Some(state_val) = state
+                .reflect_ref()
+                .as_struct()
+                .and_then(|s| s.field(param_field))
+            {
+                if let Some(tuple) = component.as_reflect_mut().as_tuple_struct_mut() {
+                    if let Some(field) = tuple.field_mut(0) {
+                        field.apply(state_val);
+                    }
+                }
+            }
+        }
+
+        Some(component)
+    }
 }
 
 pub struct TaskBuilder<T: Reflect> {
     name: String,
+    operator_type: Option<String>,
+    operator_params: Vec<String>,
     preconditions: Vec<Condition>,
     effects: Vec<Effect>,
     subtasks: Vec<Task<T>>,
 }
 
 impl<T: Reflect> TaskBuilder<T> {
+    pub fn operator(mut self, op_type: impl Into<String>, params: Vec<String>) -> Self {
+        self.operator_type = Some(op_type.into());
+        self.operator_params = params;
+        self
+    }
     pub fn precondition(mut self, cond: Condition) -> Self {
         self.preconditions.push(cond);
         self
@@ -134,6 +173,8 @@ impl<T: Reflect> TaskBuilder<T> {
     pub fn build(self) -> Task<T> {
         Task {
             name: self.name,
+            operator_type: self.operator_type,
+            operator_params: self.operator_params,
             preconditions: self.preconditions,
             effects: self.effects,
             subtasks: self.subtasks,
@@ -238,15 +279,22 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
 
 fn parse_task<T: Reflect>(pair: Pair<Rule>) -> Task<T> {
     let mut inner = pair.into_inner();
-
-    // Get the task name (should be a STRING token)
     let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
-
     let mut builder = Task::<T>::builder(name);
 
-    // Process the remaining statements within the task block
     for stmt in inner {
         match stmt.as_rule() {
+            Rule::operator_statement => {
+                let op_def = stmt
+                    .into_inner()
+                    .find(|p| p.as_rule() == Rule::operator_def)
+                    .unwrap();
+                let mut op_parts = op_def.into_inner();
+                let op_name = op_parts.next().unwrap().as_str().to_string();
+                let params: Vec<String> =
+                    op_parts.map(|param| param.as_str().to_string()).collect();
+                builder = builder.operator(op_name, params);
+            }
             Rule::precondition_statement => {
                 let condition = stmt
                     .into_inner()
@@ -289,6 +337,16 @@ pub fn parse_htn<T: Reflect>(input: &str) -> HTN<T> {
 // ---------- Example Usage ----------
 
 fn main() {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.add_plugins(bevy::log::LogPlugin::default());
+    app.register_type::<SellGold>();
+
+    app.add_systems(Startup, startup);
+    app.run();
+}
+
+fn startup(mut commands: Commands, type_registry: TypeRegistry) {
     let dsl = r#"
     task "Acquire Gold" {
         precondition: energy > 3;
@@ -302,7 +360,14 @@ fn main() {
             effect: set energy = 10;
         }
     }
+    task "Sell Gold" {
+        operator: SellGold(energy);
+        precondition: gold == true;
+        effect: set gold = false;
+    }
     "#;
+
+    let entity = commands.spawn(()).id();
 
     // Here we specify that our HTN is for GameState.
     let htn = parse_htn::<GameState>(dsl);
@@ -316,6 +381,25 @@ fn main() {
     println!("Initial state: {:#?}", state);
     for task in htn.tasks.iter() {
         if task.preconditions.iter().all(|c| c.evaluate(&state)) {
+            if let Some(operator) = task.create_operator(&state, &type_registry) {
+                let registration = type_registry
+                    .get_with_short_type_path(task.operator_type.as_ref().unwrap())
+                    .unwrap();
+
+                let refcomp = registration.data::<ReflectComponent>().unwrap().clone();
+                commands.queue(move |world: &mut World| {
+                    refcomp.insert(world.get_entity_mut(entity), operator.as_ref());
+                });
+
+                // .insert(&mut commands.entity(entity), operator.as_ref());
+            }
+
+            for eff in task.effects.iter() {
+                eff.apply(state);
+            }
+        }
+
+        if task.preconditions.iter().all(|c| c.evaluate(&state)) {
             println!("Executing task: {}", task.name);
             for eff in task.effects.iter() {
                 eff.apply(&mut state);
@@ -326,3 +410,7 @@ fn main() {
     }
     println!("Final state: {:#?}", state);
 }
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+struct SellGold(i32);

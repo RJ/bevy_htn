@@ -1,9 +1,13 @@
 WHITESPACE = _{ " " | "\t" | "\n" }
 
-task                   =  { "task" ~ STRING ~ "{" ~ statement* ~ "}" }
+task                   =  { "task" ~ STRING ~ "{" ~ (operator_statement | statement)* ~ "}" }
 statement              = _{ precondition_statement | effect_statement | task }
 precondition_statement =  { "precondition:" ~ condition ~ ";" }
 effect_statement       =  { "effect:" ~ effect ~ ";" }
+
+operator_statement =  { "operator:" ~ operator_def ~ ";" }
+operator_def       =  { identifier ~ ("(" ~ operator_param* ~ ")")? }
+operator_param     = @{ identifier }
 
 condition  = { identifier ~ operator ~ value }
 operator   = { ">" | "==" }
