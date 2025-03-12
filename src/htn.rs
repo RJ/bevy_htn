@@ -79,31 +79,31 @@ impl Effect {
     }
 }
 
-// Make Task generic over any state type T that implements Reflect.
 #[derive(Clone, Debug, Reflect)]
-pub struct Task<T: Reflect> {
+pub struct PrimitiveTask<T: Reflect> {
     pub name: String,
-    pub operator_type: Option<String>,
-    /// param names from state to copy into operator struct
-    pub operator_params: Vec<String>,
+    pub operator: Operator,
     pub preconditions: Vec<HtnCondition>,
     pub effects: Vec<Effect>,
-    pub subtasks: Vec<Task<T>>,
+    pub expected_effects: Vec<Effect>,
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect> Task<T> {
-    pub fn builder(name: impl Into<String>) -> TaskBuilder<T> {
-        TaskBuilder {
-            name: name.into(),
-            operator_type: None,
-            operator_params: Vec::new(),
-            preconditions: Vec::new(),
-            effects: Vec::new(),
-            subtasks: Vec::new(),
-        }
-    }
+#[derive(Clone, Debug, Reflect)]
+pub struct Method<T: Reflect> {
+    pub preconditions: Vec<HtnCondition>,
+    pub subtasks: Vec<String>, // Just the task names now
+    _phantom: PhantomData<T>,
+}
 
+#[derive(Clone, Debug, Reflect)]
+pub struct CompoundTask<T: Reflect> {
+    pub name: String,
+    pub methods: Vec<Method<T>>,
+    _phantom: PhantomData<T>,
+}
+
+impl<T: Reflect> PrimitiveTask<T> {
     /// To execute a primitive task is to insert the operator component into an entity.
     /// The component can have fields with names matching fields from the state, and the
     /// value of those state fields are initialized into the operator component before spawning.
@@ -113,20 +113,19 @@ impl<T: Reflect> Task<T> {
         type_registry: &TypeRegistry,
         entity: &mut EntityWorldMut,
     ) -> Option<bool> {
-        let op_type = self.operator_type.as_ref()?;
+        let op_type = self.operator.name();
         let registration = type_registry.get_with_short_type_path(op_type)?;
         let reflect_default = registration
             .data::<ReflectDefault>()
             .expect("ReflectDefault should be registered");
         let mut value: Box<dyn Reflect> = reflect_default.default();
 
-        // not supporting tuple structs for now
-        // (if just one param, and can't find by named field, assume tuple struct?)
-        for param in self.operator_params.iter() {
+        for param in self.operator.params().iter() {
             let Ok(Some(state_val)) = state.reflect_ref().as_struct().map(|s| s.field(param))
             else {
                 continue;
             };
+            // operator components are either structs or tuple structs
             if let Ok(dyn_struct) = value.reflect_mut().as_struct() {
                 dyn_struct.field_mut(param).unwrap().apply(state_val);
             } else if let Ok(dyn_tuple_struct) = value.reflect_mut().as_tuple_struct() {
@@ -144,58 +143,47 @@ impl<T: Reflect> Task<T> {
             .data::<ReflectComponent>()
             .expect("ReflectComponent should be registered");
 
-        let partial_reflect = value
-            .reflect_mut()
-            .as_struct()
-            .unwrap()
-            .as_partial_reflect();
+        // components are either structs or tuple structs
+        let partial_reflect = if let Ok(s) = value.reflect_mut().as_struct() {
+            s.as_partial_reflect()
+        } else if let Ok(ts) = value.reflect_mut().as_tuple_struct() {
+            ts.as_partial_reflect()
+        } else {
+            panic!("Value must be either a struct or tuple struct")
+        };
 
         reflect_component.insert(entity, partial_reflect, type_registry);
         Some(true)
     }
+
+    /// Returns true if all preconditions are met.
+    pub fn preconditions_met(&self, state: &T) -> bool {
+        self.preconditions.iter().all(|cond| cond.evaluate(state))
+    }
 }
 
-pub struct TaskBuilder<T: Reflect> {
-    name: String,
-    operator_type: Option<String>,
-    operator_params: Vec<String>,
-    preconditions: Vec<HtnCondition>,
-    effects: Vec<Effect>,
-    subtasks: Vec<Task<T>>,
+#[derive(Clone, Debug, Reflect)]
+pub enum Operator {
+    Spawn { name: String, params: Vec<String> },
+    Trigger { name: String, params: Vec<String> },
 }
 
-impl<T: Reflect> TaskBuilder<T> {
-    pub fn operator(mut self, op_type: impl Into<String>, params: Vec<String>) -> Self {
-        self.operator_type = Some(op_type.into());
-        self.operator_params = params;
-        self
+impl Operator {
+    pub fn name(&self) -> &str {
+        match self {
+            Operator::Spawn { name, .. } => name,
+            Operator::Trigger { name, .. } => name,
+        }
     }
-    pub fn precondition(mut self, cond: HtnCondition) -> Self {
-        self.preconditions.push(cond);
-        self
-    }
-    pub fn effect(mut self, eff: Effect) -> Self {
-        self.effects.push(eff);
-        self
-    }
-    pub fn subtask(mut self, task: Task<T>) -> Self {
-        self.subtasks.push(task);
-        self
-    }
-    pub fn build(self) -> Task<T> {
-        Task {
-            name: self.name,
-            operator_type: self.operator_type,
-            operator_params: self.operator_params,
-            preconditions: self.preconditions,
-            effects: self.effects,
-            subtasks: self.subtasks,
-            _phantom: PhantomData,
+    pub fn params(&self) -> &[String] {
+        match self {
+            Operator::Spawn { params, .. } => params,
+            Operator::Trigger { params, .. } => params,
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Reflect)]
 pub struct HTN<T: Reflect> {
     pub tasks: Vec<Task<T>>,
 }
@@ -204,6 +192,13 @@ impl<T: Reflect> HTN<T> {
     pub fn builder() -> HTNBuilder<T> {
         HTNBuilder { tasks: Vec::new() }
     }
+
+    pub fn get_task_by_name(&self, name: &str) -> Option<&Task<T>> {
+        self.tasks.iter().find(|task| match task {
+            Task::Primitive(primitive) => primitive.name == name,
+            Task::Compound(compound) => compound.name == name,
+        })
+    }
 }
 
 pub struct HTNBuilder<T: Reflect> {
@@ -211,11 +206,145 @@ pub struct HTNBuilder<T: Reflect> {
 }
 
 impl<T: Reflect> HTNBuilder<T> {
-    pub fn task(mut self, task: Task<T>) -> Self {
-        self.tasks.push(task);
+    pub fn primitive_task(mut self, task: PrimitiveTask<T>) -> Self {
+        self.tasks.push(Task::Primitive(task));
         self
     }
+
+    pub fn compound_task(mut self, task: CompoundTask<T>) -> Self {
+        self.tasks.push(Task::Compound(task));
+        self
+    }
+
     pub fn build(self) -> HTN<T> {
         HTN { tasks: self.tasks }
     }
 }
+
+// Add this for building methods
+pub struct MethodBuilder<T: Reflect> {
+    preconditions: Vec<HtnCondition>,
+    subtasks: Vec<String>, // Just task names, not the actual tasks
+    _phantom: PhantomData<T>,
+}
+
+impl<T: Reflect> MethodBuilder<T> {
+    pub fn new() -> Self {
+        MethodBuilder {
+            preconditions: Vec::new(),
+            subtasks: Vec::new(),
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn precondition(mut self, cond: HtnCondition) -> Self {
+        self.preconditions.push(cond);
+        self
+    }
+
+    pub fn subtask(mut self, task_name: impl Into<String>) -> Self {
+        self.subtasks.push(task_name.into());
+        self
+    }
+
+    pub fn build(self) -> Method<T> {
+        Method {
+            preconditions: self.preconditions,
+            subtasks: self.subtasks,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+// Create specific builders for each task type
+pub struct PrimitiveTaskBuilder<T: Reflect> {
+    name: String,
+    operator: Option<Operator>,
+    preconditions: Vec<HtnCondition>,
+    effects: Vec<Effect>,
+    expected_effects: Vec<Effect>,
+    _phantom: PhantomData<T>,
+}
+
+impl<T: Reflect> PrimitiveTaskBuilder<T> {
+    pub fn new(name: impl Into<String>) -> Self {
+        PrimitiveTaskBuilder {
+            name: name.into(),
+            operator: None,
+            preconditions: Vec::new(),
+            effects: Vec::new(),
+            expected_effects: Vec::new(),
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn operator(mut self, op: Operator) -> Self {
+        self.operator = Some(op);
+        self
+    }
+
+    pub fn precondition(mut self, cond: HtnCondition) -> Self {
+        self.preconditions.push(cond);
+        self
+    }
+
+    pub fn effect(mut self, eff: Effect) -> Self {
+        self.effects.push(eff);
+        self
+    }
+
+    pub fn expected_effect(mut self, eff: Effect) -> Self {
+        self.expected_effects.push(eff);
+        self
+    }
+
+    pub fn build(self) -> PrimitiveTask<T> {
+        PrimitiveTask {
+            name: self.name,
+            operator: self
+                .operator
+                .expect("Operator is required for primitive tasks"),
+            preconditions: self.preconditions,
+            effects: self.effects,
+            expected_effects: self.expected_effects,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+pub struct CompoundTaskBuilder<T: Reflect> {
+    name: String,
+    methods: Vec<Method<T>>,
+    _phantom: PhantomData<T>,
+}
+
+impl<T: Reflect> CompoundTaskBuilder<T> {
+    pub fn new(name: impl Into<String>) -> Self {
+        CompoundTaskBuilder {
+            name: name.into(),
+            methods: Vec::new(),
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn method(mut self, method: Method<T>) -> Self {
+        self.methods.push(method);
+        self
+    }
+
+    pub fn build(self) -> CompoundTask<T> {
+        CompoundTask {
+            name: self.name,
+            methods: self.methods,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Reflect)]
+pub enum Task<T: Reflect> {
+    Primitive(PrimitiveTask<T>),
+    Compound(CompoundTask<T>),
+}
+
+impl<T: Reflect> Task<T> {}

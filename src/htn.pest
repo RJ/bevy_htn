@@ -1,11 +1,16 @@
 WHITESPACE = _{ " " | "\t" | "\n" }
 
-task                   =  { "task" ~ STRING ~ "{" ~ (operator_statement | statement)* ~ "}" }
-statement              = _{ precondition_statement | effect_statement | task }
+primitive_task         =  { "primitive_task" ~ STRING ~ "{" ~ (operator_statement | effect_statement | expected_effect_statement | precondition_statement)* ~ "}" }
+compound_task          =  { "compound_task" ~ STRING ~ "{" ~ method* ~ "}" }
+method                 =  { "method" ~ "{" ~ (precondition_statement | subtask_statement)* ~ "}" }
+subtask_statement      =  { "subtask:" ~ identifier ~ ";" }
 precondition_statement =  { "precondition:" ~ condition ~ ";" }
 effect_statement       =  { "effect:" ~ effect ~ ";" }
+expected_effect_statement = { "expected_effect:" ~ effect ~ ";" }
 
-operator_statement =  { "operator:" ~ operator_def ~ ";" }
+operator_statement =  { "operator:" ~ (spawn_operator | trigger_operator) }
+spawn_operator     =  { "spawn:" ~ operator_def ~ ";" }
+trigger_operator   =  { "trigger:" ~ operator_def ~ ";" }
 operator_def       =  { identifier ~ ("(" ~ operator_param* ~ ")")? }
 operator_param     = @{ identifier }
 
@@ -19,4 +24,4 @@ identifier = @{ ASCII_ALPHANUMERIC+ }
 value      = @{ ("true" | "false") | ASCII_DIGIT+ }
 STRING     = @{ "\"" ~ ((!"\"" ~ ANY))* ~ "\"" }
 
-htn = { SOI ~ WHITESPACE* ~ task+ ~ WHITESPACE* ~ EOI }
+htn = { SOI ~ WHITESPACE* ~ (primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }

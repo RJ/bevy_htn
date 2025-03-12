@@ -1,0 +1,24 @@
+primitive_task "Acquire Gold" {
+    precondition: energy > 0;
+    operator: spawn: SellGold(energy);
+    effect: set gold = true;
+    effect: inc energy by 1;
+    expected_effect: inc energy by 2;
+}
+
+primitive_task "Sell Gold" {
+    operator: trigger: SellGold(energy);
+    effect: set gold = false;
+}
+
+compound_task "CompleteQuest" {
+    method {
+        precondition: gold == false;
+        subtask: AcquireGold;
+        subtask: SellGold;
+    }
+    method {
+        precondition: energy > 5;
+        subtask: SellGold;
+    }
+}
