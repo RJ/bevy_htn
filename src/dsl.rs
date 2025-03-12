@@ -41,19 +41,24 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
             let mut parts = inner_pair.into_inner();
             let field = parts.next().unwrap().as_str().to_string();
             let val_str = parts.next().unwrap().as_str();
+
             if val_str == "true" || val_str == "false" {
                 let bool_val = val_str == "true";
                 Effect::SetBool {
                     field,
                     value: bool_val,
                 }
-            } else {
-                let int_val = val_str
-                    .parse::<i32>()
-                    .expect("Invalid integer in set effect");
+            } else if let Ok(int_val) = val_str.parse::<i32>() {
                 Effect::SetInt {
                     field,
                     value: int_val,
+                }
+            } else {
+                // Assume it's an identifier
+                let identifier = val_str.to_string();
+                Effect::SetIdentifier {
+                    field,
+                    value: identifier,
                 }
             }
         }

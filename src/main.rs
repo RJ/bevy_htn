@@ -9,8 +9,16 @@ use htn_assets::*;
 #[derive(Reflect, Clone, Debug, Default)]
 #[reflect(Default)]
 pub struct GameState {
-    pub gold: bool,
-    pub energy: i32,
+    pub location: Vec2,
+    pub trunk_health: i32,
+    // true if found_trunk_location is set
+    pub found_trunk: bool,
+    pub found_trunk_location: Vec2,
+    pub can_navigate_to_enemy: bool,
+    pub attacked_recently: bool,
+    pub can_see_enemy: bool,
+    pub has_seen_enemy_recently: bool,
+    pub last_enemy_location: Vec2,
 }
 
 // ---------- Example Usage ----------

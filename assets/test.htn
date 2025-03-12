@@ -1,24 +1,67 @@
-primitive_task "Acquire Gold" {
-    precondition: energy > 0;
-    operator: spawn: SellGold(energy);
-    effect: set gold = true;
-    effect: inc energy by 1;
-    expected_effect: inc energy by 2;
-}
-
-primitive_task "Sell Gold" {
-    operator: trigger: SellGold(energy);
-    effect: set gold = false;
-}
-
-compound_task "CompleteQuest" {
+compound_task "BeTrunkThumper" {
     method {
-        precondition: gold == false;
-        subtask: AcquireGold;
-        subtask: SellGold;
+        precondition: can_see_enemy == true;
+        subtask: AttackEnemy;
     }
     method {
-        precondition: energy > 5;
-        subtask: SellGold;
+        precondition: has_seen_enemy_recently == true;
+        subtask: NavigateToEnemy;
+        subtask: RegainLOSRoar;
     }
+    method {
+        subtask: ChooseBridgeToCheck;
+        subtask: NavigateToBridge;
+        subtask: CheckBridge;
+    }
+}
+
+compound_task "AttackEnemy" {
+    method {
+        precondition: trunk_health > 0;
+        subtask: NavigateToEnemy;
+        subtask: DoTrunkSlam;
+    }
+    method {
+        subtask: FindTrunk;
+        subtask: NavigateToTrunk;
+        subtask: UprootTrunk;
+        subtask: AttackEnemy;
+    }
+}
+
+primitive_task "DoTrunkSlam" {
+    operator:
+        spawn: DoTrunkSlamOperator;
+    effect: inc trunk_health by -1;
+}
+
+primitive_task "UprootTrunk" {
+    operator:
+        spawn: UprootTrunkOperator;
+    effect: set trunk_health = 3;
+    effect: set found_trunk = false;
+}
+
+primitive_task "FindTrunk" {
+    operator:
+        spawn: FindTrunkOperator;
+    effect: set found_trunk = true;
+}
+
+primitive_task "NavigateToTrunk" {
+    operator:
+        spawn: NavigateToOperator(found_trunk_location);
+    effect: set location = found_trunk_location;
+}
+
+primitive_task "NavigateToEnemy" {
+    operator:
+        spawn: NavigateToOperator(last_enemy_location);
+    effect: set location = last_enemy_location;
+}
+
+primitive_task "RegainLOSRoar" {
+    precondition: can_see_enemy == true;
+    operator:
+        spawn: RegainLOSOperator; 
 }

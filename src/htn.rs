@@ -1,4 +1,7 @@
-use bevy::{prelude::*, reflect::TypeRegistry};
+use bevy::{
+    prelude::*,
+    reflect::{ReflectMut, TypeRegistry},
+};
 use std::marker::PhantomData;
 
 #[derive(Clone, Debug, Reflect)]
@@ -44,6 +47,7 @@ impl HtnCondition {
 pub enum Effect {
     SetBool { field: String, value: bool },
     SetInt { field: String, value: i32 },
+    SetIdentifier { field: String, value: String },
     IncrementInt { field: String, by: i32 },
 }
 
@@ -74,6 +78,11 @@ impl Effect {
                         *i += *by;
                     }
                 }
+            }
+            Effect::SetIdentifier { field, value } => {
+                let newval = reflected.field(value).unwrap().clone_value();
+                let val = reflected.field_mut(field).unwrap();
+                val.apply(newval.as_ref());
             }
         }
     }

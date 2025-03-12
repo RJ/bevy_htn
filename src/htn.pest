@@ -17,11 +17,11 @@ operator_param     = @{ identifier }
 condition  = { identifier ~ operator ~ value }
 operator   = { ">" | "==" }
 effect     = { set_effect | inc_effect }
-set_effect = { "set" ~ identifier ~ "=" ~ value }
+set_effect = { "set" ~ identifier ~ "=" ~ (value | identifier) }
 inc_effect = { "inc" ~ identifier ~ "by" ~ value }
 
-identifier = @{ ASCII_ALPHANUMERIC+ }
-value      = @{ ("true" | "false") | ASCII_DIGIT+ }
+identifier = @{ (ASCII_ALPHANUMERIC | "_")+ }
+value      = @{ ("true" | "false") | "-"? ~ ASCII_DIGIT+ }
 STRING     = @{ "\"" ~ ((!"\"" ~ ANY))* ~ "\"" }
 
 htn = { SOI ~ WHITESPACE* ~ (primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }
