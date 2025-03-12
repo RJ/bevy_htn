@@ -123,14 +123,19 @@ impl<T: Reflect> Task<T> {
         // not supporting tuple structs for now
         // (if just one param, and can't find by named field, assume tuple struct?)
         for param in self.operator_params.iter() {
-            if let Ok(Some(state_val)) = state.reflect_ref().as_struct().map(|s| s.field(param)) {
-                value
-                    .reflect_mut()
-                    .as_struct()
-                    .unwrap()
-                    .field_mut(param)
-                    .unwrap()
-                    .apply(state_val);
+            let Ok(Some(state_val)) = state.reflect_ref().as_struct().map(|s| s.field(param))
+            else {
+                continue;
+            };
+            if let Ok(dyn_struct) = value.reflect_mut().as_struct() {
+                dyn_struct.field_mut(param).unwrap().apply(state_val);
+            } else if let Ok(dyn_tuple_struct) = value.reflect_mut().as_tuple_struct() {
+                dyn_tuple_struct.field_mut(0).unwrap().apply(state_val);
+            } else {
+                panic!(
+                    "Unsupported operator type: {:#?} - should be tuple_struct or struct",
+                    value
+                );
             }
         }
         info!("Inserting operator: {value:?}");
