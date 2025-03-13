@@ -1,5 +1,5 @@
+use crate::dsl::parse_htn;
 use crate::htn::HTN;
-use crate::parse_htn;
 use bevy::asset::{io::Reader, AssetLoader, LoadContext};
 use bevy::prelude::*;
 use futures_lite::AsyncReadExt;

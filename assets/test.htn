@@ -5,7 +5,7 @@ compound_task "BeTrunkThumper" {
     }
     method {
         precondition: has_seen_enemy_recently == true;
-        subtask: NavigateToEnemy;
+        subtask: NavigateToLastEnemyLoc;
         subtask: RegainLOSRoar;
     }
     method {
@@ -60,8 +60,30 @@ primitive_task "NavigateToEnemy" {
     effect: set location = last_enemy_location;
 }
 
+primitive_task "NavigateToLastEnemyLoc" {
+    operator:
+        spawn: NavigateToOperator(last_enemy_location);
+    effect: set location = last_enemy_location;
+    expected_effect: set can_see_enemy = true;
+}
+
 primitive_task "RegainLOSRoar" {
     precondition: can_see_enemy == true;
     operator:
         spawn: RegainLOSOperator; 
+}
+
+primitive_task "ChooseBridgeToCheck" {
+    operator:
+        spawn: ChooseBridgeToCheckOperator;
+}
+
+primitive_task "NavigateToBridge" {
+    operator:
+        spawn: NavigateToOperator(bridge_to_check);
+}
+
+primitive_task "CheckBridge" {
+    operator:
+        spawn: CheckBridgeOperator;
 }

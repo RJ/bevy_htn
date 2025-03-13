@@ -113,11 +113,14 @@ pub struct CompoundTask<T: Reflect> {
 }
 
 impl<T: Reflect> CompoundTask<T> {
-    /// Returns the first method with passing preconditions, or None
-    pub fn find_method(&self, state: &T) -> Option<&Method<T>> {
+    /// Finds the first method with passing preconditions, skipping the first `skip` methods.
+    pub fn find_method(&self, state: &T, skip: usize) -> Option<(&Method<T>, usize)> {
         self.methods
             .iter()
-            .find(|method| method.preconditions.iter().all(|cond| cond.evaluate(state)))
+            .enumerate()
+            .skip(skip)
+            .find(|(_, method)| method.preconditions.iter().all(|cond| cond.evaluate(state)))
+            .map(|(i, method)| (method, i))
     }
 }
 
@@ -201,6 +204,7 @@ impl Operator {
     }
 }
 
+/// This is the HTN domain - a list of all the compound and primitive tasks.
 #[derive(Debug, Reflect)]
 pub struct HTN<T: Reflect> {
     pub tasks: Vec<Task<T>>,

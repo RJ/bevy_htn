@@ -4,8 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = "0.15.3"
+bevy = {version = "0.15", default-features = false, features = ["bevy_asset"]}
 futures-lite = "2.6.0"
 pest = "2.7.15"
 pest_derive = "2.7.15"
 thiserror = "2.0.12"
+
+[dev-dependencies]
+bevy = {version = "0.15", default-features = true}
+bevy-inspector-egui = "0.29"
