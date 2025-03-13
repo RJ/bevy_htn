@@ -245,7 +245,7 @@ impl Operator {
 }
 
 /// This is the HTN domain - a list of all the compound and primitive tasks.
-#[derive(Debug, Reflect)]
+#[derive(Debug, Reflect, Clone)]
 pub struct HTN<T: Reflect> {
     pub tasks: Vec<Task<T>>,
 }

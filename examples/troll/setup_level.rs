@@ -8,48 +8,88 @@ use bevy::{
 use bevy_htn::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
+#[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub enum LoadingState {
+    #[default]
+    AwaitingAssetLoading,
+    SpawningEntities,
+    Ready,
+}
+
 #[derive(Resource, Debug)]
 pub struct Rolodex {
+    pub troll_htn: Handle<HtnAsset<GameState>>,
     pub bridge_positions: Vec<Vec2>,
     pub troll: Entity,
     pub player: Entity,
 }
-impl Default for Rolodex {
-    fn default() -> Self {
-        Self {
-            bridge_positions: vec![],
-            // these get set during Startup anyway:
-            troll: Entity::PLACEHOLDER,
-            player: Entity::PLACEHOLDER,
+
+fn create_rolodex(assets: Res<AssetServer>, mut commands: Commands) {
+    let test = assets.load("test.htn");
+    info!("Loading test.htn via asset server.. {test:?}");
+    commands.insert_resource(Rolodex {
+        troll_htn: test,
+        bridge_positions: vec![],
+        troll: Entity::PLACEHOLDER,
+        player: Entity::PLACEHOLDER,
+    });
+}
+
+fn check_asset_loaded(
+    mut ev_asset: EventReader<AssetEvent<HtnAsset<GameState>>>,
+    mut next_state: ResMut<NextState<LoadingState>>,
+) {
+    for ev in ev_asset.read() {
+        if let AssetEvent::LoadedWithDependencies { .. } = ev {
+            info!("HTN asset loaded: ");
+            next_state.set(LoadingState::SpawningEntities);
+            break;
         }
     }
 }
 
-#[derive(Resource, Debug, Default)]
-pub struct Htns {
-    pub troll_htn: Handle<HtnAsset<GameState>>,
-    pub printed: bool,
-}
-
 pub fn setup_level(app: &mut App) {
-    app.init_resource::<Rolodex>();
-    app.init_resource::<Htns>();
+    app.insert_state(LoadingState::AwaitingAssetLoading);
     app.add_plugins(
         // Show inspector with F12
         WorldInspectorPlugin::default().run_if(input_toggle_active(false, KeyCode::F12)),
     );
+    // this triggers the asset loading
+    app.add_systems(Startup, create_rolodex);
+    // this checks if the htn asset is loaded and advances the state
     app.add_systems(
-        Startup,
+        Update,
+        check_asset_loaded
+            .run_if(on_event::<AssetEvent<HtnAsset<GameState>>>)
+            .run_if(in_state(LoadingState::AwaitingAssetLoading)),
+    );
+    app.add_systems(
+        OnEnter(LoadingState::SpawningEntities),
         (
+            // (
             setup_camera,
-            load_htn_asset,
+            create_rolodex,
             setup_bridges,
             setup_troll,
             setup_player,
-        ),
+            // ),
+            |mut next_state: ResMut<NextState<LoadingState>>| {
+                info!("Assets loaded, entities spawned: Ready.");
+                next_state.set(LoadingState::Ready);
+            },
+        )
+            .chain(),
     );
-    app.add_systems(Update, spawn_trunk.run_if(on_timer(Duration::from_secs(1))));
-    app.add_systems(Update, player_movement);
+    app.add_systems(
+        Update,
+        spawn_trunk
+            .run_if(in_state(LoadingState::Ready))
+            .run_if(on_timer(Duration::from_secs(1))),
+    );
+    app.add_systems(
+        Update,
+        player_movement.run_if(in_state(LoadingState::Ready)),
+    );
 }
 
 const PLAYER_SPEED: f32 = 200.0;
@@ -72,12 +112,6 @@ fn player_movement(
 
 fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2d);
-}
-
-fn load_htn_asset(assets: Res<AssetServer>, mut htns: ResMut<Htns>) {
-    let test = assets.load("test.htn");
-    info!("Loading test.htn via asset server.. {test:?}");
-    htns.troll_htn = test;
 }
 
 pub const BRIDGE_WIDTH: f32 = 200.0;
@@ -112,8 +146,9 @@ fn setup_bridges(
     let bridge2 = Vec2::new(0.0, 0.0);
     let bridge3 = Vec2::new(0.0, -BRIDGE_SPACING - BRIDGE_HEIGHT);
 
+    let z = -3.0;
     commands.spawn((
-        Transform::from_xyz(bridge1.x, bridge1.y, 0.),
+        Transform::from_xyz(bridge1.x, bridge1.y, z),
         bridge_mesh.clone(),
         bridge_material.clone(),
         Bridge,
@@ -121,7 +156,7 @@ fn setup_bridges(
         Text2d::new("Bridge 1"),
     ));
     commands.spawn((
-        Transform::from_xyz(bridge2.x, bridge2.y, 0.),
+        Transform::from_xyz(bridge2.x, bridge2.y, z),
         bridge_mesh.clone(),
         bridge_material.clone(),
         Bridge,
@@ -129,7 +164,7 @@ fn setup_bridges(
         Text2d::new("Bridge 2"),
     ));
     commands.spawn((
-        Transform::from_xyz(bridge3.x, bridge3.y, 0.),
+        Transform::from_xyz(bridge3.x, bridge3.y, z),
         bridge_mesh.clone(),
         bridge_material.clone(),
         Bridge,
@@ -137,8 +172,6 @@ fn setup_bridges(
         Text2d::new("Bridge 3"),
     ));
     rolodex.bridge_positions = vec![bridge1, bridge2, bridge3];
-
-    commands.spawn((Transform::from_xyz(0.0, 0.0, 0.), Troll, Name::new("Troll")));
 }
 
 fn setup_troll(
@@ -153,14 +186,17 @@ fn setup_troll(
 
     rolodex.troll = commands
         .spawn((
-            Transform::from_xyz(BRIDGE_WIDTH + BRIDGE_DIST, 0.0, 1.),
-            troll_mesh.clone(),
-            troll_material.clone(),
+            Transform::from_xyz(BRIDGE_WIDTH + BRIDGE_DIST, 0.0, -3.0),
+            Text2d::new("Troll"),
             Troll,
             Name::new("Troll"),
         ))
         .with_children(|parent| {
-            parent.spawn((Transform::from_xyz(0.0, 0.0, 10.0), Text2d::new("Troll")));
+            parent.spawn((
+                Transform::from_xyz(0.0, 0.0, -0.1),
+                troll_mesh.clone(),
+                troll_material.clone(),
+            ));
             parent.spawn((
                 Transform::from_xyz(0.0, 0.0, -0.1),
                 Mesh2d(
@@ -191,14 +227,17 @@ fn setup_player(
 
     rolodex.player = commands
         .spawn((
-            Transform::from_xyz(-BRIDGE_WIDTH - BRIDGE_DIST, 0.0, 2.),
-            player_mesh.clone(),
-            player_material.clone(),
+            Transform::from_xyz(-BRIDGE_WIDTH - BRIDGE_DIST, 0.0, -2.0),
+            Text2d::new("Player"),
             Player,
             Name::new("Player"),
         ))
         .with_children(|parent| {
-            parent.spawn((Transform::from_xyz(0.0, 0.0, 10.0), Text2d::new("Player")));
+            parent.spawn((
+                Transform::from_xyz(0.0, 0.0, -0.1),
+                player_mesh.clone(),
+                player_material.clone(),
+            ));
         })
         .id();
 }
@@ -230,7 +269,7 @@ fn spawn_trunk(
 
     commands
         .spawn((
-            Transform::from_translation(spawn_location.extend(0.0)),
+            Transform::from_translation(spawn_location.extend(-4.0)),
             Trunk,
             Name::new("Trunk"),
             Text2d::new("Trunk"),
