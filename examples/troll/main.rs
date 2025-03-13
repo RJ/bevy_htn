@@ -1,13 +1,17 @@
+use bevy::color::palettes::css;
 use bevy::prelude::*;
 use bevy_htn::prelude::*;
 
-use bevy_egui::egui;
-use bevy_egui::EguiContext;
+use bevy_inspector_egui::bevy_egui;
 use bevy_inspector_egui::quick::ResourceInspectorPlugin;
-use bevy_inspector_egui::{bevy_egui, egui::Align2};
 use bevy_inspector_egui::{
     inspector_options::std_options::NumberDisplay, prelude::*, DefaultInspectorConfigPlugin,
 };
+
+mod setup_level;
+use setup_level::*;
+mod operators;
+use operators::*;
 
 #[derive(Reflect, Resource, Clone, Debug, Default, InspectorOptions)]
 #[reflect(Default, Resource, InspectorOptions)]
@@ -30,6 +34,7 @@ fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins);
     app.add_plugins(DefaultInspectorConfigPlugin);
+    app.add_plugins(HtnAssetPlugin::<GameState>::default());
     app.add_plugins(ResourceInspectorPlugin::<GameState>::default());
     app.register_type::<GameState>();
     let state = GameState {
@@ -45,31 +50,35 @@ fn main() {
         dummy_field: false,
     };
     app.insert_resource(state);
+    app.add_plugins(setup_level);
 
-    app.register_type::<SellGold>();
-    app.add_observer(on_add_sellgold);
-    app.add_systems(Startup, startup);
-    app.add_plugins(HtnAssetPlugin::<GameState>::default());
-    app.init_resource::<Htns>();
+    // app.register_type::<SellGold>();
+    // app.add_observer(on_add_sellgold);
+
     app.add_systems(Update, plan.run_if(resource_changed::<GameState>));
 
     app.run();
 }
 
-#[derive(Resource, Debug, Default)]
-struct Htns {
-    test: Handle<HtnAsset<GameState>>,
-    printed: bool,
+struct Plan {
+    pub tasks: Vec<String>,
 }
 
-fn startup(assets: Res<AssetServer>, mut htns: ResMut<Htns>) {
-    let test = assets.load("test.htn");
-    info!("Loading test.htn via asset server.. {test:?}");
-    htns.test = test;
-}
+// need a child of the troll to act as the HtnOperator parent, that holds the plan and has children that
+// contain the operator components.
+// then when an operator completes, it sets HtnOperator.set_result(true), and an OnChange system
+// can despawn that entity and spawn the next one in the plan.
 
-fn plan(mut htns: ResMut<Htns>, assets: Res<Assets<HtnAsset<GameState>>>, state: Res<GameState>) {
-    let Some(htn_asset) = assets.get(&htns.test) else {
+// TODO sensors that update the world state too..
+
+fn plan(
+    mut htns: ResMut<Htns>,
+    assets: Res<Assets<HtnAsset<GameState>>>,
+    state: Res<GameState>,
+    rolodex: Res<Rolodex>,
+    mut commands: Commands,
+) {
+    let Some(htn_asset) = assets.get(&htns.troll_htn) else {
         return;
     };
     if !htns.printed {
@@ -80,17 +89,4 @@ fn plan(mut htns: ResMut<Htns>, assets: Res<Assets<HtnAsset<GameState>>>, state:
     let mut planner = HtnPlanner::new(&htn_asset.htn);
     let plan = planner.plan(state.as_ref());
     info!("Plan:\n{:#?}\n", plan);
-}
-
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
-struct SellGold {
-    energy: i32,
-}
-
-fn on_add_sellgold(t: Trigger<OnAdd, SellGold>, q: Query<&SellGold>) {
-    let Ok(sellgold) = q.get(t.entity()) else {
-        return;
-    };
-    info!("SellGold added: {:#?}", sellgold);
 }

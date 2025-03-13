@@ -124,11 +124,39 @@ impl<T: Reflect> CompoundTask<T> {
     }
 }
 
+/// Inserted on an entity alongside an Operator component, telling us what task we're executing.
+#[derive(Clone, Debug, Reflect, Component)]
+pub struct HtnOperator {
+    task_name: String,
+    result: Option<bool>,
+}
+
+impl HtnOperator {
+    pub fn new(task_name: String) -> Self {
+        Self {
+            task_name,
+            result: None,
+        }
+    }
+    pub fn task_name(&self) -> &str {
+        &self.task_name
+    }
+    pub fn result(&self) -> Option<bool> {
+        self.result
+    }
+    pub fn set_result(&mut self, result: bool) {
+        self.result = Some(result);
+    }
+}
+
 impl<T: Reflect> PrimitiveTask<T> {
-    /// To execute a primitive task is to insert the operator component into an entity.
-    /// The component can have fields with names matching fields from the state, and the
+    /// To execute a primitive task is to either:
+    /// - insert the operator component into an entity
+    /// - trigger an event using the operator struct
+    ///
+    /// The operator struct can have fields with names matching fields from the state, and the
     /// value of those state fields are initialized into the operator component before spawning.
-    pub fn insert_operator(
+    pub fn execute(
         &self,
         state: &T,
         type_registry: &TypeRegistry,
@@ -158,6 +186,16 @@ impl<T: Reflect> PrimitiveTask<T> {
                 );
             }
         }
+
+        // so we've created the operator struct, and initialized any fields.
+        // now we either insert into an entity or trigger an event.
+        match &self.operator {
+            Operator::Spawn { .. } => {}
+            Operator::Trigger { .. } => {
+                panic!("Don't know how to trigger events from reflected structs yet");
+            }
+        }
+
         info!("Inserting operator: {value:?}");
 
         let reflect_component = registration
@@ -173,6 +211,8 @@ impl<T: Reflect> PrimitiveTask<T> {
             panic!("Value must be either a struct or tuple struct")
         };
 
+        // insert the component that says we're executing a task.
+        entity.insert(HtnOperator::new(self.name.clone()));
         reflect_component.insert(entity, partial_reflect, type_registry);
         Some(true)
     }

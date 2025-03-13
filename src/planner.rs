@@ -32,7 +32,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
     }
 
     pub fn plan(&mut self, initial_state: &T) -> &Vec<String> {
-        const SANITY_LIMIT: usize = 100;
+        const SANITY_LIMIT: usize = 1000;
         let mut sanity_count = 0;
 
         self.final_plan.clear();
@@ -41,10 +41,11 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             .push_back(self.htn.root_task().name().to_string());
         self.method_index = 0;
         let mut state = initial_state.clone();
-        // Using vecdeque as a stack, top fo stack (next item) is the FRONT
+        // Using vecdeque as a stack, top of stack (next item) is the FRONT
         while let Some(current_task_name) = self.task_stack.pop_front() {
             sanity_count += 1;
             if sanity_count > SANITY_LIMIT {
+                // in case of logic errors during dev..
                 error!("Sanity limit reached, aborting");
                 break;
             }
