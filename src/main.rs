@@ -3,8 +3,10 @@ use bevy::prelude::*;
 mod dsl;
 mod htn;
 mod htn_assets;
+mod planner;
 use dsl::*;
 use htn_assets::*;
+use planner::*;
 
 #[derive(Reflect, Clone, Debug, Default)]
 #[reflect(Default)]

@@ -112,6 +112,15 @@ pub struct CompoundTask<T: Reflect> {
     _phantom: PhantomData<T>,
 }
 
+impl<T: Reflect> CompoundTask<T> {
+    /// Returns the first method with passing preconditions, or None
+    pub fn find_method(&self, state: &T) -> Option<&Method<T>> {
+        self.methods
+            .iter()
+            .find(|method| method.preconditions.iter().all(|cond| cond.evaluate(state)))
+    }
+}
+
 impl<T: Reflect> PrimitiveTask<T> {
     /// To execute a primitive task is to insert the operator component into an entity.
     /// The component can have fields with names matching fields from the state, and the
@@ -207,6 +216,10 @@ impl<T: Reflect> HTN<T> {
             Task::Primitive(primitive) => primitive.name == name,
             Task::Compound(compound) => compound.name == name,
         })
+    }
+
+    pub fn root_task(&self) -> &Task<T> {
+        self.tasks.first().expect("No root task found")
     }
 }
 
@@ -356,4 +369,11 @@ pub enum Task<T: Reflect> {
     Compound(CompoundTask<T>),
 }
 
-impl<T: Reflect> Task<T> {}
+impl<T: Reflect> Task<T> {
+    pub fn name(&self) -> &str {
+        match self {
+            Task::Primitive(primitive) => &primitive.name,
+            Task::Compound(compound) => &compound.name,
+        }
+    }
+}
