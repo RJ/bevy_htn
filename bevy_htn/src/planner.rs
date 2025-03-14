@@ -1,15 +1,88 @@
-use std::collections::VecDeque;
-
 use crate::htn::*;
 use bevy::prelude::*;
+use std::collections::VecDeque;
 
-pub struct HtnPlanner<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
-    htn: &'a HTN<T>,
-    task_stack: VecDeque<String>,
-    decomp_stack: Vec<DecompositionState>,
-    method_index: usize,
-    final_plan: Vec<String>,
-    elapsed_secs: f32,
+#[derive(Reflect, Debug, Component)]
+pub struct Plan {
+    plan_id: u32,
+    next_task_index: usize,
+    pub tasks: Vec<PlannedTask>,
+}
+
+impl Plan {
+    pub fn new(plan_id: u32, tasks: Vec<String>) -> Self {
+        let tasks = tasks
+            .iter()
+            .enumerate()
+            .map(|(idx, name)| PlannedTask {
+                name: name.clone(),
+                status: TaskStatus::NotStarted,
+                id: PlannedTaskId(plan_id, idx),
+            })
+            .collect();
+        Self {
+            plan_id,
+            next_task_index: 0,
+            tasks,
+        }
+    }
+    /// Marks next task as running and returns the task id and name.
+    pub fn execute_next_task(&mut self) -> Option<(PlannedTaskId, String)> {
+        if self.next_task_index >= self.tasks.len() {
+            return None;
+        }
+        let task = &mut self.tasks[self.next_task_index];
+        task.status = TaskStatus::Running;
+        self.next_task_index += 1;
+        Some((task.id, task.name.clone()))
+    }
+}
+
+impl std::fmt::Display for Plan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Plan[{}]",
+            self.tasks
+                .iter()
+                .map(|t| t.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
+
+impl PartialEq for Plan {
+    fn eq(&self, other: &Self) -> bool {
+        if self.tasks.len() != other.tasks.len() {
+            return false;
+        }
+        self.tasks
+            .iter()
+            .zip(other.tasks.iter())
+            .all(|(a, b)| a.name == b.name)
+    }
+}
+
+impl Eq for Plan {}
+
+/// A unique id of a task in a plan, comprised of the plan id and the index of the task in the plan.
+#[derive(Reflect, Clone, Copy, Debug, Component)]
+pub struct PlannedTaskId(u32, usize);
+
+#[derive(Reflect, Clone, Debug)]
+pub struct PlannedTask {
+    pub id: PlannedTaskId,
+    pub name: String,
+    pub status: TaskStatus,
+}
+
+#[derive(Reflect, Debug, Clone, PartialEq)]
+pub enum TaskStatus {
+    NotStarted,
+    Running,
+    Success,
+    Failure,
 }
 
 #[derive(Debug)]
@@ -18,6 +91,13 @@ struct DecompositionState {
     final_plan: Vec<String>,
     next_method_index: usize,
 }
+pub struct HtnPlanner<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
+    htn: &'a HTN<T>,
+    task_stack: VecDeque<String>,
+    decomp_stack: Vec<DecompositionState>,
+    method_index: usize,
+    plan_seq: u32,
+}
 
 impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<'a, T> {
     pub fn new(htn: &'a HTN<T>) -> Self {
@@ -25,21 +105,25 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             task_stack: VecDeque::new(),
             htn,
             decomp_stack: Vec::new(),
-            final_plan: Vec::new(),
             method_index: 0,
-            elapsed_secs: 0.0,
+            plan_seq: 0,
         }
     }
 
-    pub fn plan(&mut self, initial_state: &T) -> &Vec<String> {
+    fn reset(&mut self) {
+        self.decomp_stack.clear();
+        self.task_stack.clear();
+        self.method_index = 0;
+        // don't reset plan_seq!
+    }
+
+    pub fn plan(&mut self, initial_state: &T) -> Plan {
         const SANITY_LIMIT: usize = 1000;
         let mut sanity_count = 0;
-
-        self.final_plan.clear();
-        self.decomp_stack.clear();
+        self.reset();
+        let mut final_plan = Vec::new();
         self.task_stack
             .push_back(self.htn.root_task().name().to_string());
-        self.method_index = 0;
         let mut state = initial_state.clone();
         // Using vecdeque as a stack, top of stack (next item) is the FRONT
         while let Some(current_task_name) = self.task_stack.pop_front() {
@@ -51,7 +135,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             }
             let Some(task) = self.htn.get_task_by_name(&current_task_name) else {
                 error!("Task {current_task_name} not found in HTN");
-                self.final_plan.clear();
+                final_plan.clear();
                 break;
             };
             info!(
@@ -68,7 +152,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                         // record decomposition
                         let decomposition = DecompositionState {
                             current_task: current_task_name.clone(),
-                            final_plan: self.final_plan.clone(),
+                            final_plan: final_plan.clone(),
                             next_method_index: method_index + 1,
                         };
                         self.decomp_stack.push(decomposition);
@@ -86,7 +170,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                     if primitive.preconditions_met(&state) {
                         info!("Adding primitive task to plan: {current_task_name}");
                         // add task to final plan
-                        self.final_plan.push(current_task_name);
+                        final_plan.push(current_task_name);
                         // apply this task's effects to the working world state
                         for effect in primitive.effects.iter() {
                             effect.apply(&mut state);
@@ -101,11 +185,13 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             }
             let decomp = self.decomp_stack.pop().unwrap();
             warn!("Restoring decomp {decomp:?}");
-            self.final_plan = decomp.final_plan;
+            final_plan = decomp.final_plan;
             self.method_index = decomp.next_method_index;
             self.task_stack.push_front(decomp.current_task);
         }
         info!("Planning final state: {state:#?}");
-        &self.final_plan
+        let plan = Plan::new(self.plan_seq, final_plan);
+        self.plan_seq += 1;
+        plan
     }
 }

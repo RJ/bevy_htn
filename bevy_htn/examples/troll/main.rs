@@ -39,7 +39,7 @@ fn main() {
     app.add_plugins(HtnAssetPlugin::<GameState>::default());
     app.add_plugins(TrollUiPlugin);
     // app.add_plugins(ResourceInspectorPlugin::<GameState>::default());
-    app.register_type::<GameState>();
+    app.add_plugins(HtnPlugin::<GameState>::default());
     app.add_plugins(setup_level);
     app.add_plugins(setup_operators_plugin);
     // app.register_type::<SellGold>();
@@ -67,14 +67,6 @@ fn initial_gamestate() -> GameState {
     }
 }
 
-/// This entity is the parent of the HTN operator entities.
-/// It holds the HTN asset and the current plan, and is a direct child of the troll.
-#[derive(Component, Reflect)]
-struct HtnSupervisor {
-    htn_handle: Handle<HtnAsset<GameState>>,
-    plan: Option<Plan>,
-}
-
 /// When this runs, all entities are spawned and the HTN asset is loaded.
 fn setup_troll_htn_supervisor(
     mut commands: Commands,
@@ -88,7 +80,6 @@ fn setup_troll_htn_supervisor(
             Name::new("Htn Supervisor"),
             HtnSupervisor {
                 htn_handle: rolodex.troll_htn.clone(),
-                plan: None,
             },
             initial_gamestate(),
         ))
@@ -96,12 +87,6 @@ fn setup_troll_htn_supervisor(
     commands
         .entity(rolodex.troll)
         .add_child(troll_htn_supervisor);
-}
-
-#[derive(Reflect, Debug)]
-struct Plan {
-    pub tasks: Vec<String>,
-    pub current_task: usize,
 }
 
 // need a child of the troll to act as the HtnOperator parent, that holds the plan and has children that
@@ -124,13 +109,19 @@ fn replan_checker(
     // state: Res<GameState>,
     rolodex: Res<Rolodex>,
     mut q: Query<
-        (&mut HtnSupervisor, &Parent, &GameState),
+        (
+            Entity,
+            &mut HtnSupervisor<GameState>,
+            &Parent,
+            &GameState,
+            Option<&Plan>,
+        ),
         Or<(Added<GameState>, Changed<GameState>)>,
     >,
     mut commands: Commands,
-    type_registry: Res<AppTypeRegistry>,
+    // type_registry: Res<AppTypeRegistry>,
 ) {
-    let Ok((mut htn_supervisor, _parent, state)) = q.get_single_mut() else {
+    let Ok((sup_entity, mut htn_supervisor, _parent, state, opt_plan)) = q.get_single_mut() else {
         return;
     };
     let Some(htn_asset) = assets.get(&htn_supervisor.htn_handle) else {
@@ -138,22 +129,32 @@ fn replan_checker(
     };
     let htn = &htn_asset.htn;
 
-    let type_registry = type_registry.read();
+    // let type_registry = type_registry.read();
 
     info!("Planning - Initial State:\n{:#?}", state);
     let mut planner = HtnPlanner::new(htn);
-    let tasks = planner.plan(state);
-    info!("Plan:\n{:#?}\n", tasks);
-    htn_supervisor.plan = Some(Plan {
-        tasks: tasks.clone(),
-        current_task: 0,
-    });
+    let plan = planner.plan(state);
 
-    let Task::Primitive(task) = htn.get_task_by_name(&tasks[0]).unwrap() else {
-        panic!("Task is not a primitive");
-    };
-    let cmd = task
-        .execution_command(state, &type_registry, Some(rolodex.troll))
-        .unwrap();
-    commands.queue(cmd);
+    if let Some(existing_plan) = opt_plan {
+        if *existing_plan == plan {
+            info!("Plan is the same as existing, skipping");
+            return;
+        }
+    }
+
+    info!("Inserting Plan:\n{:#?}\n", plan);
+    commands.entity(sup_entity).insert(plan);
+
+    // htn_supervisor.plan = Some(Plan {
+    //     tasks: plan.clone(),
+    //     current_task: 0,
+    // });
+
+    // let Task::Primitive(task) = htn.get_task_by_name(&plan[0]).unwrap() else {
+    //     panic!("Task is not a primitive");
+    // };
+    // let cmd = task
+    //     .execution_command(state, &type_registry, Some(rolodex.troll))
+    //     .unwrap();
+    // commands.queue(cmd);
 }

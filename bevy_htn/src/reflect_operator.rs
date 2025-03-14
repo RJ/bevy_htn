@@ -61,7 +61,7 @@ impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
                 let op_event = ev.clone();
                 TriggerEmitterCommand {
                     f: Box::new(move |world: &mut World| {
-                        let e = HtnTaskEvent {
+                        let e = HtnTaskExecute {
                             // Fn closure, can't modify captured env, so clone again (they are small)
                             inner: op_event.clone(),
                         };
@@ -80,7 +80,7 @@ impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
 }
 
 #[derive(Event, Debug, Clone)]
-pub struct HtnTaskEvent<T: Clone + std::fmt::Debug> {
+pub struct HtnTaskExecute<T: Clone + std::fmt::Debug> {
     pub inner: T,
 }
 

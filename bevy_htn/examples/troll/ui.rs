@@ -1,4 +1,5 @@
 use bevy::{prelude::*, render::camera::Viewport, window::PrimaryWindow};
+use bevy_htn::prelude::*;
 use bevy_inspector_egui::{
     bevy_egui::{egui, EguiContext, EguiPlugin},
     bevy_inspector, DefaultInspectorConfigPlugin,
@@ -70,14 +71,21 @@ fn left_sidebar(
     // let mut gamestate = world.query::<&mut GameState>().single_mut(world);
     // let rolodex = world.get_resource::<Rolodex>().unwrap();
     // let troll = rolodex.troll;
-    let (entity, htn_sup) = world
-        .query_filtered::<(Entity, &HtnSupervisor), With<GameState>>()
+    let (entity, htn_sup, opt_plan) = world
+        .query_filtered::<(Entity, &HtnSupervisor<GameState>, Option<&Plan>), With<GameState>>()
         .single(world);
-    let tasks = htn_sup
-        .plan
-        .as_ref()
-        .map(|p| p.tasks.clone())
+    let tasks = opt_plan
+        .map(|plan| {
+            plan.tasks
+                .iter()
+                .map(|t| format!("{} - {:?}", t.name, t.status))
+                .collect::<Vec<_>>()
+        })
         .unwrap_or(vec![]);
+    // .plan
+    // .as_ref()
+    // .map(|p| p.tasks.clone())
+    // .unwrap_or(vec![]);
     margins.left += egui::SidePanel::left("left_panel")
         .resizable(true)
         .default_width(225.0)
@@ -90,7 +98,7 @@ fn left_sidebar(
                 ui.label("None");
             } else {
                 for task in tasks.iter() {
-                    ui.label(format!("– {task}"));
+                    ui.label(format!("> {task}"));
                 }
             }
         })

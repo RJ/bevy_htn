@@ -19,3 +19,6 @@ bevy_behave.workspace = true
 bevy = {workspace = true, default-features = true}
 bevy-inspector-egui.workspace = true
 bevy_pancam.workspace = true
+
+[lints.clippy]
+type_complexity = "allow"
