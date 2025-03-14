@@ -1,14 +1,15 @@
-use bevy::color::palettes::css;
+// use bevy::color::palettes::css;
 use bevy::prelude::*;
-use bevy::reflect::TypeRegistry;
+// use bevy::reflect::TypeRegistry;
 use bevy_htn::prelude::*;
 
-use bevy_inspector_egui::bevy_egui;
-use bevy_inspector_egui::quick::ResourceInspectorPlugin;
+// use bevy_inspector_egui::bevy_egui;
+// use bevy_inspector_egui::quick::ResourceInspectorPlugin;
 use bevy_inspector_egui::{
     inspector_options::std_options::NumberDisplay, prelude::*, DefaultInspectorConfigPlugin,
 };
-
+mod ui;
+use ui::*;
 mod setup_level;
 use setup_level::*;
 mod operators;
@@ -36,6 +37,7 @@ fn main() {
     app.add_plugins(DefaultPlugins);
     app.add_plugins(DefaultInspectorConfigPlugin);
     app.add_plugins(HtnAssetPlugin::<GameState>::default());
+    app.add_plugins(TrollUiPlugin);
     // app.add_plugins(ResourceInspectorPlugin::<GameState>::default());
     app.register_type::<GameState>();
     app.add_plugins(setup_level);
@@ -67,7 +69,7 @@ fn initial_gamestate() -> GameState {
 
 /// This entity is the parent of the HTN operator entities.
 /// It holds the HTN asset and the current plan, and is a direct child of the troll.
-#[derive(Component)]
+#[derive(Component, Reflect)]
 struct HtnSupervisor {
     htn_handle: Handle<HtnAsset<GameState>>,
     plan: Option<Plan>,
@@ -96,8 +98,10 @@ fn setup_troll_htn_supervisor(
         .add_child(troll_htn_supervisor);
 }
 
+#[derive(Reflect, Debug)]
 struct Plan {
     pub tasks: Vec<String>,
+    pub current_task: usize,
 }
 
 // need a child of the troll to act as the HtnOperator parent, that holds the plan and has children that
@@ -118,7 +122,7 @@ fn print_htn(assets: Res<Assets<HtnAsset<GameState>>>, rolodex: Res<Rolodex>) {
 fn replan_checker(
     assets: Res<Assets<HtnAsset<GameState>>>,
     // state: Res<GameState>,
-    // rolodex: Res<Rolodex>,
+    rolodex: Res<Rolodex>,
     mut q: Query<
         (&mut HtnSupervisor, &Parent, &GameState),
         Or<(Added<GameState>, Changed<GameState>)>,
@@ -142,49 +146,14 @@ fn replan_checker(
     info!("Plan:\n{:#?}\n", tasks);
     htn_supervisor.plan = Some(Plan {
         tasks: tasks.clone(),
+        current_task: 0,
     });
 
     let Task::Primitive(task) = htn.get_task_by_name(&tasks[0]).unwrap() else {
         panic!("Task is not a primitive");
     };
-    let entity = None;
-    let cmd = task.execute(state, &type_registry, entity).unwrap();
+    let cmd = task
+        .execution_command(state, &type_registry, Some(rolodex.troll))
+        .unwrap();
     commands.queue(cmd);
-    // let op_type = task.operator.name();
-    // info!("Operator type: {op_type}");
-    // let Some(registration) = type_registry.get_with_short_type_path(op_type) else {
-    //     error!("No type registry entry for operator '{op_type}', be sure you've called app.register_type::<{op_type}>()");
-    //     panic!("Missing type registry entry for operator");
-    // };
-
-    // let reflect_default = registration
-    //     .data::<ReflectDefault>()
-    //     .expect("ReflectDefault should be registered");
-    // // let mut boxed_reflect: Box<dyn Reflect> = reflect_default.default();
-    // let boxed_reflect: Box<dyn Reflect> = reflect_default.default();
-
-    // // We have a Default::default() Reflect version of our operator type, now we copy in values
-    // // from the planner's state for matching param names.
-
-    // let reflect_htpoperator = registration
-    //     .data::<ReflectHtnOperator>()
-    //     .expect("`ReflectHtnOperator` should be registered");
-
-    // let htn_operator: &dyn HtnOperator =
-    //     reflect_htpoperator.get(boxed_reflect.as_reflect()).unwrap();
-    // // TODO copy values in.
-
-    // info!(
-    //     "Operator: {op_type} with params: {:?}",
-    //     task.operator.params()
-    // );
-
-    // htn_operator.operator_trait_fn();
-
-    // let cmd = move |world: &mut World| {
-    //     let atr = world.get_resource::<AppTypeRegistry>().unwrap().clone();
-    //     let type_registry = atr.read();
-
-    // };
-    // commands.queue(cmd);
 }

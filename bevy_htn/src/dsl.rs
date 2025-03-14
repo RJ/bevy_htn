@@ -181,11 +181,11 @@ fn parse_compound_task<T: Reflect>(pair: Pair<Rule>) -> CompoundTask<T> {
     builder.build()
 }
 
+// TODO error handling
 pub fn parse_htn<T: Reflect>(input: &str) -> HTN<T> {
     let pairs = HtnParser::parse(Rule::htn, input).expect("Failed to parse DSL");
     let mut htn_builder = HTN::<T>::builder();
 
-    // Get the first (and only) htn pair, then iterate through its tasks
     let htn_pair = pairs.into_iter().next().unwrap();
     for pair in htn_pair.into_inner() {
         match pair.as_rule() {

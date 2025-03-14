@@ -132,7 +132,9 @@ impl<T: Reflect> PrimitiveTask<T> {
     ///
     /// The operator struct can have fields with names matching fields from the state, and the
     /// value of those state fields are initialized into the operator component before spawning.
-    pub fn execute(
+    ///
+    /// This returns a struct that "impl Command" and applying it will emit a trigger event.
+    pub fn execution_command(
         &self,
         state: &T,
         type_registry: &TypeRegistry,
@@ -180,25 +182,40 @@ impl<T: Reflect> PrimitiveTask<T> {
             .data::<ReflectHtnOperator>()
             .expect("`ReflectEvent` should be registered");
 
-        // let partial_reflect = boxed_reflect
-        //     .reflect_mut()
-        //     .as_struct()
-        //     .unwrap()
-        //     .as_partial_reflect();
-
         let command = reflect_event.trigger(boxed_reflect.as_reflect(), entity);
         Some(command)
+    }
 
-        // let event: &dyn Event = reflect_event.get(boxed_reflect.as_reflect()).unwrap();
-
-        // info!(
-        //     "Operator: {op_type} with params: {:?}",
-        //     self.operator.params()
-        // );
-
-        // htn_operator.operator_trait_fn();
-
-        // Some(true)
+    /// Checks that every operator has the correct type registry entries and that any fields used
+    /// by operators are also present in the state.
+    pub fn verify_operator(&self, state: &T, type_registry: &TypeRegistry) -> Result<(), String> {
+        let op_type = self.operator.name();
+        let Some(registration) = type_registry.get_with_short_type_path(op_type) else {
+            return Err(format!("No type registry entry for operator '{op_type}'"));
+        };
+        if registration.data::<ReflectDefault>().is_none() {
+            return Err(format!(
+                "ReflectDefault should be registered, did you forget to add #[reflect(Default)] to {op_type}?"
+            ));
+        }
+        if registration.data::<ReflectHtnOperator>().is_none() {
+            return Err(format!(
+                "ReflectHtnOperator should be registered, did you forget to add #[reflect(HtnOperator)] to {op_type}?"
+            ));
+        }
+        let s = state
+            .reflect_ref()
+            .as_struct()
+            .expect("State should be a reflectable struct");
+        let state_type = std::any::type_name::<T>();
+        for param in self.operator.params().iter() {
+            if s.field(param).is_none() {
+                return Err(format!(
+                    "State type `{state_type}` does not have field `{param}`, which is used in the `{op_type}` operator"
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Returns true if all preconditions are met.
@@ -239,6 +256,7 @@ impl<T: Reflect> HTN<T> {
         HTNBuilder { tasks: Vec::new() }
     }
 
+    /// Returns the task with the given name.
     pub fn get_task_by_name(&self, name: &str) -> Option<&Task<T>> {
         self.tasks.iter().find(|task| match task {
             Task::Primitive(primitive) => primitive.name == name,
@@ -246,8 +264,21 @@ impl<T: Reflect> HTN<T> {
         })
     }
 
+    /// Returns the first (compound) task in the HTN.
     pub fn root_task(&self) -> &Task<T> {
         self.tasks.first().expect("No root task found")
+    }
+
+    /// Verifies that every operator has the correct type registry entries and that any fields used
+    /// by operators are also present in the state.
+    pub fn verify_operators(&self, state: &T, type_registry: &TypeRegistry) -> Result<(), String> {
+        for task in self.tasks.iter() {
+            match task {
+                Task::Primitive(primitive) => primitive.verify_operator(state, type_registry)?,
+                Task::Compound(_) => continue,
+            }
+        }
+        Ok(())
     }
 }
 
@@ -264,6 +295,18 @@ impl<T: Reflect> HTNBuilder<T> {
     pub fn compound_task(mut self, task: CompoundTask<T>) -> Self {
         self.tasks.push(Task::Compound(task));
         self
+    }
+
+    /// Verifies that every operator has the correct type registry entries and that any fields used
+    /// by operators are also present in the state.
+    pub fn verify_operators(self, state: &T, type_registry: &TypeRegistry) -> Result<Self, String> {
+        for task in self.tasks.iter() {
+            match task {
+                Task::Primitive(primitive) => primitive.verify_operator(state, type_registry)?,
+                Task::Compound(_) => continue,
+            }
+        }
+        Ok(self)
     }
 
     pub fn build(self) -> HTN<T> {

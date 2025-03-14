@@ -2,14 +2,16 @@ mod dsl;
 mod htn;
 mod htn_assets;
 mod planner;
-mod reflect_event;
+mod reflect_operator;
 
 pub mod prelude {
     pub use super::dsl::*;
     pub use super::htn::*;
     pub use super::htn_assets::*;
     pub use super::planner::*;
-    pub use super::reflect_event::*;
+    pub use super::reflect_operator::*;
+    pub use bevy_behave;
+    pub use bevy_htn_macros::HtnOperator;
 }
 
 // pub struct HtnPlugin<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {

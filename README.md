@@ -6,18 +6,16 @@ PLanning can be triggered when:
 * world state changed
 
 
-# Plan
+# behave.
 
-* Takes copy of world state.
-* starts at root of domain: the first compound task in the htn file?
-* finds first method to pass preconditions in the compound task called "Be an NPC".
-** iter over the method's subtasks.
-   if primitive: 
-    check if preconditions are met, if so, apply effects to world state, and add primitive task to the plan.
-   if compound:
-    do same thing we did to root –
+Operators are Clone structs which get emitted wrapped in a trigger to execute as part of the plan.
+
+Idea:
+An operator (which must derive HtnOperator) has to convert to a bevy_behave tree.
+then the task exectutor runs the bt..
 
 
+## Hmm.
 
 not sure if i need expected effects. 
 effects presumably are applied to GameState once an operator successfully completes.

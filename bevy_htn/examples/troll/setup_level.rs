@@ -67,7 +67,6 @@ pub fn setup_level(app: &mut App) {
         OnEnter(LoadingState::SpawningEntities),
         (
             // (
-            setup_camera,
             create_rolodex,
             setup_bridges,
             setup_troll,
@@ -108,10 +107,6 @@ fn player_movement(
     .normalize_or_zero()
         * PLAYER_SPEED
         * time.delta_secs();
-}
-
-fn setup_camera(mut commands: Commands) {
-    commands.spawn(Camera2d);
 }
 
 pub const BRIDGE_WIDTH: f32 = 200.0;
@@ -227,7 +222,7 @@ fn setup_player(
 
     rolodex.player = commands
         .spawn((
-            Transform::from_xyz(-BRIDGE_WIDTH - BRIDGE_DIST, 0.0, -2.0),
+            Transform::from_xyz(-BRIDGE_WIDTH / 2.0 - BRIDGE_DIST, 0.0, -2.0),
             Text2d::new("Player"),
             Player,
             Name::new("Player"),

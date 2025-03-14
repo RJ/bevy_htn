@@ -6,11 +6,6 @@ use bevy::{prelude::*, reflect::FromType};
 /// A trait derived for all HTN operator structs that get triggered when executing a task.
 pub trait HtnOperator: Reflect + Default + Clone + std::fmt::Debug {}
 
-/// Blanket implementation that automatically implements HtnOperator for any type T that already
-/// implements the HtnOperator trait bounds (Reflect + Default + Clone + Debug). This means any
-/// type that has the required trait bounds will automatically get the HtnOperator implementation.
-// impl<T: HtnOperator + Reflect> HtnOperator for T {}
-
 /// A struct used to operate on reflected [`HtnOperator`] of a type.
 ///
 /// A [`ReflectHtnOperator`] for type `T` can be obtained via
