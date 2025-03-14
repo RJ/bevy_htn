@@ -106,8 +106,7 @@ fn print_htn(assets: Res<Assets<HtnAsset<GameState>>>, rolodex: Res<Rolodex>) {
 #[allow(clippy::type_complexity)]
 fn replan_checker(
     assets: Res<Assets<HtnAsset<GameState>>>,
-    // state: Res<GameState>,
-    rolodex: Res<Rolodex>,
+    _rolodex: Res<Rolodex>,
     mut q: Query<
         (
             Entity,

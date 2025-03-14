@@ -18,6 +18,7 @@ pub mod prelude {
 }
 
 use bevy::{prelude::*, reflect::GetTypeRegistration};
+use bevy_behave::prelude::BehavePlugin;
 use prelude::*;
 use std::marker::PhantomData;
 
@@ -35,6 +36,9 @@ impl<T: Reflect + Component + TypePath> Default for HtnPlugin<T> {
 
 impl<T: Reflect + Component + TypePath + GetTypeRegistration> Plugin for HtnPlugin<T> {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<BehavePlugin>() {
+            app.add_plugins(BehavePlugin::new(Update));
+        }
         app.register_type::<T>();
         app.register_type::<PlannedTaskId>();
         app.register_type::<PlannedTask>();

@@ -3,8 +3,14 @@
 /// This implementation yields a Command that can be applied to call world.trigger.
 use bevy::{prelude::*, reflect::FromType};
 
+use bevy_behave::prelude::*;
+
 /// A trait derived for all HTN operator structs that get triggered when executing a task.
-pub trait HtnOperator: Reflect + Default + Clone + std::fmt::Debug {}
+pub trait HtnOperator: Reflect + Default + Clone + std::fmt::Debug {
+    fn to_tree(&self) -> Tree<Behave> {
+        behave! { Behave::Wait(1.0) }
+    }
+}
 
 /// A struct used to operate on reflected [`HtnOperator`] of a type.
 ///
@@ -21,6 +27,7 @@ pub struct ReflectHtnOperator(ReflectHtnOperatorFns);
 pub struct ReflectHtnOperatorFns {
     /// Function pointer implementing [`ReflectHtnOperator::trigger()`].
     pub trigger: fn(&dyn Reflect, Option<Entity>) -> TriggerEmitterCommand,
+    pub to_tree: fn(&dyn Reflect) -> Tree<Behave>,
 }
 
 impl ReflectHtnOperatorFns {
@@ -38,6 +45,10 @@ impl ReflectHtnOperator {
     /// Creates Command that will emit the trigger
     pub fn trigger(&self, event: &dyn Reflect, entity: Option<Entity>) -> TriggerEmitterCommand {
         (self.0.trigger)(event, entity)
+    }
+
+    pub fn to_tree(&self, event: &dyn Reflect) -> Tree<Behave> {
+        (self.0.to_tree)(event)
     }
 
     /// Create a custom implementation of [`ReflectHtnOperator`].
@@ -74,6 +85,12 @@ impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
                         }
                     }),
                 }
+            },
+            to_tree: |op| -> Tree<Behave> {
+                let Some(ev) = op.downcast_ref::<E>() else {
+                    panic!("Event is not of type {}", std::any::type_name::<E>());
+                };
+                ev.to_tree()
             },
         })
     }

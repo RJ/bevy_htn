@@ -1,7 +1,7 @@
-use bevy::{prelude::*, reflect::TypeRegistry};
-use std::marker::PhantomData;
-
 use crate::prelude::{ReflectHtnOperator, TriggerEmitterCommand};
+use bevy::{prelude::*, reflect::TypeRegistry};
+use bevy_behave::prelude::*;
+use std::marker::PhantomData;
 
 // use crate::prelude::{HtnOperator, ReflectHtnOperator};
 
@@ -139,7 +139,7 @@ impl<T: Reflect> PrimitiveTask<T> {
         state: &T,
         type_registry: &TypeRegistry,
         entity: Option<Entity>,
-    ) -> Option<TriggerEmitterCommand> {
+    ) -> Option<(TriggerEmitterCommand, Tree<Behave>)> {
         let op_type = self.operator.name();
         let Some(registration) = type_registry.get_with_short_type_path(op_type) else {
             error!("No type registry entry for operator '{op_type}', be sure you've called app.register_type::<{op_type}>()");
@@ -178,12 +178,14 @@ impl<T: Reflect> PrimitiveTask<T> {
             }
         }
 
-        let reflect_event = registration
+        let reflect_op = registration
             .data::<ReflectHtnOperator>()
-            .expect("`ReflectEvent` should be registered");
+            .expect("`ReflectHtnOperator` should be registered");
 
-        let command = reflect_event.trigger(boxed_reflect.as_reflect(), entity);
-        Some(command)
+        let tree = reflect_op.to_tree(boxed_reflect.as_reflect());
+
+        let command = reflect_op.trigger(boxed_reflect.as_reflect(), entity);
+        Some((command, tree))
     }
 
     /// Checks that every operator has the correct type registry entries and that any fields used

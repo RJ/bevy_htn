@@ -29,12 +29,38 @@ impl Plan {
     /// Marks next task as running and returns the task id and name.
     pub fn execute_next_task(&mut self) -> Option<(PlannedTaskId, String)> {
         if self.next_task_index >= self.tasks.len() {
+            info!("Plan complete, no next task.");
             return None;
         }
         let task = &mut self.tasks[self.next_task_index];
         task.status = TaskStatus::Running;
         self.next_task_index += 1;
         Some((task.id, task.name.clone()))
+    }
+
+    pub fn report_task_completion(&mut self, task_id: PlannedTaskId, success: bool) {
+        if let Some((idx, task)) = self
+            .tasks
+            .iter_mut()
+            .enumerate()
+            .find(|(_idx, t)| t.id == task_id)
+        {
+            info!(
+                "Report task completion: {task_id:?} {} = {success}",
+                task.name
+            );
+            if success {
+                task.status = TaskStatus::Success;
+            } else {
+                task.status = TaskStatus::Failure;
+            }
+            self.next_task_index = idx + 1;
+        } else {
+            error!("Task {task_id:?} not found in plan?");
+        }
+        if self.next_task_index >= self.tasks.len() {
+            info!("Plan completed!");
+        }
     }
 }
 
@@ -67,7 +93,7 @@ impl PartialEq for Plan {
 impl Eq for Plan {}
 
 /// A unique id of a task in a plan, comprised of the plan id and the index of the task in the plan.
-#[derive(Reflect, Clone, Copy, Debug, Component)]
+#[derive(Reflect, Clone, Copy, Debug, Component, PartialEq)]
 pub struct PlannedTaskId(u32, usize);
 
 #[derive(Reflect, Clone, Debug)]
