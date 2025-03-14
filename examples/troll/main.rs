@@ -1,5 +1,6 @@
 use bevy::color::palettes::css;
 use bevy::prelude::*;
+use bevy::reflect::TypeRegistry;
 use bevy_htn::prelude::*;
 
 use bevy_inspector_egui::bevy_egui;
@@ -38,7 +39,7 @@ fn main() {
     // app.add_plugins(ResourceInspectorPlugin::<GameState>::default());
     app.register_type::<GameState>();
     app.add_plugins(setup_level);
-
+    app.add_plugins(setup_operators_plugin);
     // app.register_type::<SellGold>();
     // app.add_observer(on_add_sellgold);
 
@@ -122,7 +123,8 @@ fn replan_checker(
         (&mut HtnSupervisor, &Parent, &GameState),
         Or<(Added<GameState>, Changed<GameState>)>,
     >,
-    // mut commands: Commands,
+    mut commands: Commands,
+    type_registry: Res<AppTypeRegistry>,
 ) {
     let Ok((mut htn_supervisor, _parent, state)) = q.get_single_mut() else {
         return;
@@ -132,6 +134,8 @@ fn replan_checker(
     };
     let htn = &htn_asset.htn;
 
+    let type_registry = type_registry.read();
+
     info!("Planning - Initial State:\n{:#?}", state);
     let mut planner = HtnPlanner::new(htn);
     let tasks = planner.plan(state);
@@ -139,4 +143,48 @@ fn replan_checker(
     htn_supervisor.plan = Some(Plan {
         tasks: tasks.clone(),
     });
+
+    let Task::Primitive(task) = htn.get_task_by_name(&tasks[0]).unwrap() else {
+        panic!("Task is not a primitive");
+    };
+    let entity = None;
+    let cmd = task.execute(state, &type_registry, entity).unwrap();
+    commands.queue(cmd);
+    // let op_type = task.operator.name();
+    // info!("Operator type: {op_type}");
+    // let Some(registration) = type_registry.get_with_short_type_path(op_type) else {
+    //     error!("No type registry entry for operator '{op_type}', be sure you've called app.register_type::<{op_type}>()");
+    //     panic!("Missing type registry entry for operator");
+    // };
+
+    // let reflect_default = registration
+    //     .data::<ReflectDefault>()
+    //     .expect("ReflectDefault should be registered");
+    // // let mut boxed_reflect: Box<dyn Reflect> = reflect_default.default();
+    // let boxed_reflect: Box<dyn Reflect> = reflect_default.default();
+
+    // // We have a Default::default() Reflect version of our operator type, now we copy in values
+    // // from the planner's state for matching param names.
+
+    // let reflect_htpoperator = registration
+    //     .data::<ReflectHtnOperator>()
+    //     .expect("`ReflectHtnOperator` should be registered");
+
+    // let htn_operator: &dyn HtnOperator =
+    //     reflect_htpoperator.get(boxed_reflect.as_reflect()).unwrap();
+    // // TODO copy values in.
+
+    // info!(
+    //     "Operator: {op_type} with params: {:?}",
+    //     task.operator.params()
+    // );
+
+    // htn_operator.operator_trait_fn();
+
+    // let cmd = move |world: &mut World| {
+    //     let atr = world.get_resource::<AppTypeRegistry>().unwrap().clone();
+    //     let type_registry = atr.read();
+
+    // };
+    // commands.queue(cmd);
 }

@@ -1,8 +1,9 @@
-use bevy::{
-    prelude::*,
-    reflect::{ReflectMut, TypeRegistry},
-};
+use bevy::{prelude::*, reflect::TypeRegistry};
 use std::marker::PhantomData;
+
+use crate::prelude::{ReflectEvent, TriggerEmitterCommand};
+
+// use crate::prelude::{HtnOperator, ReflectHtnOperator};
 
 #[derive(Clone, Debug, Reflect)]
 pub enum HtnCondition {
@@ -124,31 +125,6 @@ impl<T: Reflect> CompoundTask<T> {
     }
 }
 
-/// Inserted on an entity alongside an Operator component, telling us what task we're executing.
-#[derive(Clone, Debug, Reflect, Component)]
-pub struct HtnOperator {
-    task_name: String,
-    result: Option<bool>,
-}
-
-impl HtnOperator {
-    pub fn new(task_name: String) -> Self {
-        Self {
-            task_name,
-            result: None,
-        }
-    }
-    pub fn task_name(&self) -> &str {
-        &self.task_name
-    }
-    pub fn result(&self) -> Option<bool> {
-        self.result
-    }
-    pub fn set_result(&mut self, result: bool) {
-        self.result = Some(result);
-    }
-}
-
 impl<T: Reflect> PrimitiveTask<T> {
     /// To execute a primitive task is to either:
     /// - insert the operator component into an entity
@@ -160,61 +136,69 @@ impl<T: Reflect> PrimitiveTask<T> {
         &self,
         state: &T,
         type_registry: &TypeRegistry,
-        entity: &mut EntityWorldMut,
-    ) -> Option<bool> {
+        entity: Option<Entity>,
+    ) -> Option<TriggerEmitterCommand> {
         let op_type = self.operator.name();
-        let registration = type_registry.get_with_short_type_path(op_type)?;
-        let reflect_default = registration
-            .data::<ReflectDefault>()
-            .expect("ReflectDefault should be registered");
-        let mut value: Box<dyn Reflect> = reflect_default.default();
+        let Some(registration) = type_registry.get_with_short_type_path(op_type) else {
+            error!("No type registry entry for operator '{op_type}', be sure you've called app.register_type::<{op_type}>()");
+            panic!("Missing type registry entry for operator");
+        };
+        let Some(reflect_default) = registration.data::<ReflectDefault>() else {
+            error!("ReflectDefault should be registered");
+            panic!("Missing ReflectDefault for operator");
+        };
+        let mut boxed_reflect: Box<dyn Reflect> = reflect_default.default();
 
         for param in self.operator.params().iter() {
-            let Ok(Some(state_val)) = state.reflect_ref().as_struct().map(|s| s.field(param))
+            let Ok(Some(state_val_for_param)) =
+                state.reflect_ref().as_struct().map(|s| s.field(param))
             else {
                 continue;
             };
             // operator components are either structs or tuple structs
-            if let Ok(dyn_struct) = value.reflect_mut().as_struct() {
-                dyn_struct.field_mut(param).unwrap().apply(state_val);
-            } else if let Ok(dyn_tuple_struct) = value.reflect_mut().as_tuple_struct() {
-                dyn_tuple_struct.field_mut(0).unwrap().apply(state_val);
+            if let Ok(dyn_struct) = boxed_reflect.reflect_mut().as_struct() {
+                if let Some(pr_field) = dyn_struct.field_mut(param) {
+                    pr_field.apply(state_val_for_param);
+                } else {
+                    error!("No field found for param: {param}, operator: {op_type}");
+                }
+            } else if let Ok(dyn_tuple_struct) = boxed_reflect.reflect_mut().as_tuple_struct() {
+                if let Some(pr_field) = dyn_tuple_struct.field_mut(0) {
+                    pr_field.apply(state_val_for_param);
+                } else {
+                    error!("No field found for param: {param}, operator: {op_type}");
+                }
             } else {
                 panic!(
                     "Unsupported operator type: {:#?} - should be tuple_struct or struct",
-                    value
+                    boxed_reflect
                 );
             }
         }
 
-        // so we've created the operator struct, and initialized any fields.
-        // now we either insert into an entity or trigger an event.
-        match &self.operator {
-            Operator::Spawn { .. } => {}
-            Operator::Trigger { .. } => {
-                panic!("Don't know how to trigger events from reflected structs yet");
-            }
-        }
+        let reflect_event = registration
+            .data::<ReflectEvent>()
+            .expect("`ReflectEvent` should be registered");
 
-        info!("Inserting operator: {value:?}");
+        // let partial_reflect = boxed_reflect
+        //     .reflect_mut()
+        //     .as_struct()
+        //     .unwrap()
+        //     .as_partial_reflect();
 
-        let reflect_component = registration
-            .data::<ReflectComponent>()
-            .expect("ReflectComponent should be registered");
+        let command = reflect_event.trigger(boxed_reflect.as_reflect(), entity);
+        Some(command)
 
-        // components are either structs or tuple structs
-        let partial_reflect = if let Ok(s) = value.reflect_mut().as_struct() {
-            s.as_partial_reflect()
-        } else if let Ok(ts) = value.reflect_mut().as_tuple_struct() {
-            ts.as_partial_reflect()
-        } else {
-            panic!("Value must be either a struct or tuple struct")
-        };
+        // let event: &dyn Event = reflect_event.get(boxed_reflect.as_reflect()).unwrap();
 
-        // insert the component that says we're executing a task.
-        entity.insert(HtnOperator::new(self.name.clone()));
-        reflect_component.insert(entity, partial_reflect, type_registry);
-        Some(true)
+        // info!(
+        //     "Operator: {op_type} with params: {:?}",
+        //     self.operator.params()
+        // );
+
+        // htn_operator.operator_trait_fn();
+
+        // Some(true)
     }
 
     /// Returns true if all preconditions are met.

@@ -1,33 +1,44 @@
 use bevy::prelude::*;
-
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
+use bevy_htn::prelude::*;
+#[derive(Event, Debug, Reflect, Default, Clone)]
+#[reflect(Default, Event)]
 pub struct DoTrunkSlamOperator;
 
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
+#[derive(Event, Debug, Reflect, Default, Clone)]
+#[reflect(Default, Event)]
 pub struct UprootTrunkOperator;
 
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
+#[derive(Event, Debug, Reflect, Default, Clone)]
+#[reflect(Default, Event)]
 pub struct FindTrunkOperator;
 
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
+#[derive(Event, Debug, Reflect, Default, Clone)]
+#[reflect(Default, Event)]
 pub struct NavigateToTrunkOperator(Vec2);
 
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
+#[derive(Event, Debug, Reflect, Default, Clone)]
+#[reflect(Default, Event)]
 pub struct NavigateToOperator(Vec2);
 
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
+#[derive(Event, Debug, Reflect, Default, Clone)]
+#[reflect(Default, Event)]
 pub struct RegainLOSOperator;
 
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
+#[derive(Event, Debug, Reflect, Default, Clone)]
+#[reflect(Default, Event)]
 pub struct ChooseBridgeToCheckOperator;
 
-#[derive(Component, Debug, Reflect, Default)]
-#[reflect(Component, Default)]
+#[derive(Event, Debug, Reflect, Default, Clone)]
+#[reflect(Default, Event)]
 pub struct CheckBridgeOperator;
+
+pub fn setup_operators_plugin(app: &mut App) {
+    app.register_type::<DoTrunkSlamOperator>();
+    app.register_type::<UprootTrunkOperator>();
+    app.register_type::<FindTrunkOperator>();
+    app.register_type::<NavigateToTrunkOperator>();
+    app.register_type::<NavigateToOperator>();
+    app.register_type::<RegainLOSOperator>();
+    app.register_type::<ChooseBridgeToCheckOperator>();
+    app.register_type::<CheckBridgeOperator>();
+}
