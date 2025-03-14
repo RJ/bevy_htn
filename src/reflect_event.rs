@@ -1,75 +1,92 @@
-/// No built-in ReflectEvent in bevy, unlike ReflectComponent.
+/// No built-in ReflectHtnOperator in bevy, unlike ReflectComponent.
 ///
 /// This implementation yields a Command that can be applied to call world.trigger.
 use bevy::{prelude::*, reflect::FromType};
 
-/// A struct used to operate on reflected [`Event`] of a type.
+/// A trait derived for all HTN operator structs that get triggered when executing a task.
+pub trait HtnOperator: Reflect + Default + Clone + std::fmt::Debug {}
+
+/// Blanket implementation that automatically implements HtnOperator for any type T that already
+/// implements the HtnOperator trait bounds (Reflect + Default + Clone + Debug). This means any
+/// type that has the required trait bounds will automatically get the HtnOperator implementation.
+// impl<T: HtnOperator + Reflect> HtnOperator for T {}
+
+/// A struct used to operate on reflected [`HtnOperator`] of a type.
 ///
-/// A [`ReflectEvent`] for type `T` can be obtained via
+/// A [`ReflectHtnOperator`] for type `T` can be obtained via
 /// [`bevy::reflect::TypeRegistration::data`].
 #[derive(Clone)]
-pub struct ReflectEvent(ReflectEventFns);
+pub struct ReflectHtnOperator(ReflectHtnOperatorFns);
 
-/// The raw function pointers needed to make up a [`ReflectEvent`].
+/// The raw function pointers needed to make up a [`ReflectHtnOperator`].
 ///
-/// This is used when creating custom implementations of [`ReflectEvent`] with
-/// [`ReflectEvent::new()`].
+/// This is used when creating custom implementations of [`ReflectHtnOperator`] with
+/// [`ReflectHtnOperator::new()`].
 #[derive(Clone)]
-pub struct ReflectEventFns {
-    /// Function pointer implementing [`ReflectEvent::trigger()`].
+pub struct ReflectHtnOperatorFns {
+    /// Function pointer implementing [`ReflectHtnOperator::trigger()`].
     pub trigger: fn(&dyn Reflect, Option<Entity>) -> TriggerEmitterCommand,
 }
 
-impl ReflectEventFns {
-    /// Get the default set of [`ReflectEventFns`] for a specific component type using its
+impl ReflectHtnOperatorFns {
+    /// Get the default set of [`ReflectHtnOperatorFns`] for a specific component type using its
     /// [`FromType`] implementation.
     ///
     /// This is useful if you want to start with the default implementation before overriding some
     /// of the functions to create a custom implementation.
-    pub fn new<T: Event + Reflect + Clone + std::fmt::Debug>() -> Self {
-        <ReflectEvent as FromType<T>>::from_type().0
+    pub fn new<T: HtnOperator + Reflect>() -> Self {
+        <ReflectHtnOperator as FromType<T>>::from_type().0
     }
 }
 
-impl ReflectEvent {
-    /// Sends reflected [`Event`] to world using [`send()`](ReflectEvent::send).
+impl ReflectHtnOperator {
+    /// Creates Command that will emit the trigger
     pub fn trigger(&self, event: &dyn Reflect, entity: Option<Entity>) -> TriggerEmitterCommand {
         (self.0.trigger)(event, entity)
     }
 
-    /// Create a custom implementation of [`ReflectEvent`].
-    pub fn new(fns: ReflectEventFns) -> Self {
+    /// Create a custom implementation of [`ReflectHtnOperator`].
+    pub fn new(fns: ReflectHtnOperatorFns) -> Self {
         Self(fns)
     }
 
-    /// The underlying function pointers implementing methods on `ReflectEvent`.
-    pub fn fn_pointers(&self) -> &ReflectEventFns {
+    /// The underlying function pointers implementing methods on `ReflectHtnOperator`.
+    pub fn fn_pointers(&self) -> &ReflectHtnOperatorFns {
         &self.0
     }
 }
 
-impl<E: Event + Reflect + Clone + std::fmt::Debug> FromType<E> for ReflectEvent {
+impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
     fn from_type() -> Self {
-        ReflectEvent(ReflectEventFns {
-            trigger: |event, entity| -> TriggerEmitterCommand {
-                let Some(ev) = event.downcast_ref::<E>() else {
+        ReflectHtnOperator(ReflectHtnOperatorFns {
+            trigger: |op, entity| -> TriggerEmitterCommand {
+                let Some(ev) = op.downcast_ref::<E>() else {
                     panic!("Event is not of type {}", std::any::type_name::<E>());
                 };
-                let trig_event = ev.clone();
+                let op_event = ev.clone();
                 TriggerEmitterCommand {
                     f: Box::new(move |world: &mut World| {
+                        let e = HtnTaskEvent {
+                            // Fn closure, can't modify captured env, so clone again (they are small)
+                            inner: op_event.clone(),
+                        };
                         if let Some(entity) = entity {
-                            info!("world.trigger_targets({trig_event:?}, {entity})");
-                            world.trigger_targets(trig_event.clone(), entity);
+                            info!("world.trigger_targets({e:?}, {entity})");
+                            world.trigger_targets(e, entity);
                         } else {
-                            info!("world.trigger({trig_event:?})");
-                            world.trigger(trig_event.clone());
+                            info!("world.trigger({e:?})");
+                            world.trigger(e);
                         }
                     }),
                 }
             },
         })
     }
+}
+
+#[derive(Event, Debug, Clone)]
+pub struct HtnTaskEvent<T: Clone + std::fmt::Debug> {
+    pub inner: T,
 }
 
 pub struct TriggerEmitterCommand {

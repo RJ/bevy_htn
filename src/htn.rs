@@ -1,7 +1,7 @@
 use bevy::{prelude::*, reflect::TypeRegistry};
 use std::marker::PhantomData;
 
-use crate::prelude::{ReflectEvent, TriggerEmitterCommand};
+use crate::prelude::{ReflectHtnOperator, TriggerEmitterCommand};
 
 // use crate::prelude::{HtnOperator, ReflectHtnOperator};
 
@@ -177,7 +177,7 @@ impl<T: Reflect> PrimitiveTask<T> {
         }
 
         let reflect_event = registration
-            .data::<ReflectEvent>()
+            .data::<ReflectHtnOperator>()
             .expect("`ReflectEvent` should be registered");
 
         // let partial_reflect = boxed_reflect

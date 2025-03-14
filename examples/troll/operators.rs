@@ -1,35 +1,38 @@
 use bevy::prelude::*;
 use bevy_htn::prelude::*;
-#[derive(Event, Debug, Reflect, Default, Clone)]
-#[reflect(Default, Event)]
+
+#[derive(Debug, Reflect, Default, Clone)]
+#[reflect(Default, HtnOperator)]
 pub struct DoTrunkSlamOperator;
 
-#[derive(Event, Debug, Reflect, Default, Clone)]
-#[reflect(Default, Event)]
+impl HtnOperator for DoTrunkSlamOperator {}
+
+#[derive(Debug, Reflect, Default, Clone)]
+#[reflect(Default, HtnOperator)]
 pub struct UprootTrunkOperator;
 
-#[derive(Event, Debug, Reflect, Default, Clone)]
-#[reflect(Default, Event)]
+#[derive(Debug, Reflect, Default, Clone)]
+#[reflect(Default, HtnOperator)]
 pub struct FindTrunkOperator;
 
-#[derive(Event, Debug, Reflect, Default, Clone)]
-#[reflect(Default, Event)]
+#[derive(Debug, Reflect, Default, Clone)]
+#[reflect(Default, HtnOperator)]
 pub struct NavigateToTrunkOperator(Vec2);
 
-#[derive(Event, Debug, Reflect, Default, Clone)]
-#[reflect(Default, Event)]
+#[derive(Debug, Reflect, Default, Clone)]
+#[reflect(Default, HtnOperator)]
 pub struct NavigateToOperator(Vec2);
 
-#[derive(Event, Debug, Reflect, Default, Clone)]
-#[reflect(Default, Event)]
+#[derive(Debug, Reflect, Default, Clone)]
+#[reflect(Default, HtnOperator)]
 pub struct RegainLOSOperator;
 
-#[derive(Event, Debug, Reflect, Default, Clone)]
-#[reflect(Default, Event)]
+#[derive(Debug, Reflect, Default, Clone)]
+#[reflect(Default, HtnOperator)]
 pub struct ChooseBridgeToCheckOperator;
 
-#[derive(Event, Debug, Reflect, Default, Clone)]
-#[reflect(Default, Event)]
+#[derive(Debug, Reflect, Default, Clone)]
+#[reflect(Default, HtnOperator)]
 pub struct CheckBridgeOperator;
 
 pub fn setup_operators_plugin(app: &mut App) {
