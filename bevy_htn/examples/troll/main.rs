@@ -48,6 +48,7 @@ fn main() {
     app.add_systems(OnEnter(LoadingState::Ready), setup_troll_htn_supervisor);
     app.add_systems(OnEnter(LoadingState::SpawningEntities), print_htn);
     app.add_systems(Update, replan_checker.run_if(in_state(LoadingState::Ready)));
+    app.add_systems(Update, troll_enemy_vision_sensor);
 
     app.run();
 }
@@ -64,6 +65,43 @@ fn initial_gamestate() -> GameState {
         has_seen_enemy_recently: false,
         last_enemy_location: Vec2::new(666., 666.),
         dummy_field: false,
+    }
+}
+
+fn troll_enemy_vision_sensor(
+    mut q: Query<&mut GameState>,
+    q_troll: Query<&Transform, With<Troll>>,
+    q_player: Query<&Transform, With<Player>>,
+    mut last_seen: Local<f32>,
+    time: Res<Time>,
+) {
+    let Ok(mut state) = q.get_single_mut() else {
+        return;
+    };
+    let troll_transform = q_troll.single();
+    let player_transform = q_player.single();
+
+    let distance = troll_transform
+        .translation
+        .xy()
+        .distance(player_transform.translation.xy());
+    // plus half player radius
+    let can_see_enemy = distance < TROLL_VISION_RADIUS + 15.0;
+    if state.can_see_enemy != can_see_enemy {
+        state.can_see_enemy = can_see_enemy;
+        if can_see_enemy {
+            state.has_seen_enemy_recently = true;
+            *last_seen = time.elapsed_secs();
+        }
+    }
+    if !state.can_see_enemy
+        && state.has_seen_enemy_recently
+        && time.elapsed_secs() - *last_seen > 5.0
+    {
+        state.has_seen_enemy_recently = false;
+    }
+    if can_see_enemy && state.last_enemy_location != player_transform.translation.xy() {
+        state.last_enemy_location = player_transform.translation.xy();
     }
 }
 
