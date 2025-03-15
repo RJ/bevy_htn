@@ -74,6 +74,7 @@ fn left_sidebar(
     let (entity, htn_sup, opt_plan) = world
         .query_filtered::<(Entity, &HtnSupervisor<GameState>, Option<&Plan>), With<GameState>>()
         .single(world);
+    let plan_id_str = opt_plan.map_or("".to_string(), |p| format!(" [{}]", p.id()));
     let tasks = opt_plan
         .map(|plan| {
             plan.tasks
@@ -93,7 +94,7 @@ fn left_sidebar(
             ui.heading("Troll HTN Example");
             ui.separator();
             bevy_inspector::ui_for_entity(world, entity, ui);
-            ui.heading("Current Plan");
+            ui.heading(format!("Current Plan\n{plan_id_str}",));
             if tasks.is_empty() {
                 ui.label("None");
             } else {

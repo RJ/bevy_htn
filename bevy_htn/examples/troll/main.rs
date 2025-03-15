@@ -29,6 +29,7 @@ pub struct GameState {
     pub can_see_enemy: bool,
     pub has_seen_enemy_recently: bool,
     pub last_enemy_location: Vec2,
+    pub next_bridge_to_check: usize,
     pub dummy_field: bool,
 }
 
@@ -64,6 +65,7 @@ fn initial_gamestate() -> GameState {
         can_see_enemy: true,
         has_seen_enemy_recently: false,
         last_enemy_location: Vec2::new(666., 666.),
+        next_bridge_to_check: 0,
         dummy_field: false,
     }
 }
@@ -101,7 +103,7 @@ fn troll_enemy_vision_sensor(
         state.has_seen_enemy_recently = false;
     }
     if can_see_enemy && state.last_enemy_location != player_transform.translation.xy() {
-        state.last_enemy_location = player_transform.translation.xy();
+        state.bypass_change_detection().last_enemy_location = player_transform.translation.xy();
     }
 }
 
@@ -164,11 +166,12 @@ fn replan_checker(
     let Some(htn_asset) = assets.get(&htn_supervisor.htn_handle) else {
         return;
     };
+    info!("GameState changed, replan check");
     let htn = &htn_asset.htn;
 
     // let type_registry = type_registry.read();
 
-    info!("Planning - Initial State:\n{:#?}", state);
+    // info!("Planning - Initial State:\n{:#?}", state);
     let mut planner = HtnPlanner::new(htn);
     let plan = planner.plan(state);
 
@@ -179,7 +182,7 @@ fn replan_checker(
         }
     }
 
-    info!("Inserting Plan:\n{:#?}\n", plan);
+    info!("Inserting Plan: {plan}");
     commands.entity(sup_entity).insert(plan);
 
     // htn_supervisor.plan = Some(Plan {

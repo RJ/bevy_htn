@@ -1,5 +1,6 @@
 use crate::htn::*;
 use bevy::prelude::*;
+use rand::Rng;
 use std::collections::VecDeque;
 
 #[derive(Reflect, Debug, Component)]
@@ -10,7 +11,8 @@ pub struct Plan {
 }
 
 impl Plan {
-    pub fn new(plan_id: u32, tasks: Vec<String>) -> Self {
+    pub fn new(tasks: Vec<String>) -> Self {
+        let plan_id = rand::rng().random::<u32>();
         let tasks = tasks
             .iter()
             .enumerate()
@@ -25,6 +27,9 @@ impl Plan {
             next_task_index: 0,
             tasks,
         }
+    }
+    pub fn id(&self) -> u32 {
+        self.plan_id
     }
     /// Marks next task as running and returns the task id and name.
     pub fn execute_next_task(&mut self) -> Option<(PlannedTaskId, String)> {
@@ -122,7 +127,6 @@ pub struct HtnPlanner<'a, T: Reflect + Default + TypePath + Clone + core::fmt::D
     task_stack: VecDeque<String>,
     decomp_stack: Vec<DecompositionState>,
     method_index: usize,
-    plan_seq: u32,
 }
 
 impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<'a, T> {
@@ -132,7 +136,6 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             htn,
             decomp_stack: Vec::new(),
             method_index: 0,
-            plan_seq: 0,
         }
     }
 
@@ -140,7 +143,6 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
         self.decomp_stack.clear();
         self.task_stack.clear();
         self.method_index = 0;
-        // don't reset plan_seq!
     }
 
     pub fn plan(&mut self, initial_state: &T) -> Plan {
@@ -164,17 +166,17 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                 final_plan.clear();
                 break;
             };
-            info!(
-                "Processing: {current_task_name} Stack: {:?}",
-                self.task_stack
-            );
+            // info!(
+            //     "Processing: {current_task_name} Stack: {:?}",
+            //     self.task_stack
+            // );
             match task {
                 Task::Compound(compound) => {
                     // find the first method with passing preconditions
                     if let Some((method, method_index)) =
                         compound.find_method(&state, self.method_index)
                     {
-                        info!("Compound task {current_task_name} has valid method {method_index}: {method:?}");
+                        // info!("Compound task {current_task_name} has valid method {method_index}: {method:?}");
                         // record decomposition
                         let decomposition = DecompositionState {
                             current_task: current_task_name.clone(),
@@ -182,29 +184,29 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                             next_method_index: method_index + 1,
                         };
                         self.decomp_stack.push(decomposition);
-                        // add subtasks to the stack in reverse order since we're using push_back
+                        // add subtasks to the stack, preserving order
                         for subtask in method.subtasks.iter().rev() {
                             self.task_stack.push_front(subtask.clone());
                         }
                         continue;
                     } else {
-                        info!("Compound task {current_task_name} has no valid method");
+                        // info!("Compound task {current_task_name} has no valid method");
                         // fall through to restore decomp
                     }
                 }
                 Task::Primitive(primitive) => {
                     if primitive.preconditions_met(&state) {
-                        info!("Adding primitive task to plan: {current_task_name}");
+                        // info!("Adding primitive task to plan: {current_task_name}");
                         // add task to final plan
                         final_plan.push(current_task_name);
                         // apply this task's effects to the working world state
                         for effect in primitive.effects.iter() {
                             effect.apply(&mut state);
                         }
-                        info!("Working state is now: {state:?}");
+                        // info!("Working state is now: {state:?}");
                         continue;
                     } else {
-                        info!("Primitive task preconditions not met: {current_task_name}");
+                        // info!("Primitive task preconditions not met: {current_task_name}");
                         // fall through to restore decomp
                     }
                 }
@@ -215,9 +217,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             self.method_index = decomp.next_method_index;
             self.task_stack.push_front(decomp.current_task);
         }
-        info!("Planning final state: {state:#?}");
-        let plan = Plan::new(self.plan_seq, final_plan);
-        self.plan_seq += 1;
-        plan
+        // info!("Planning final state: {state:#?}");
+        Plan::new(final_plan)
     }
 }

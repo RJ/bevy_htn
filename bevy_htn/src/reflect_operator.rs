@@ -5,11 +5,13 @@ use bevy::{prelude::*, reflect::FromType};
 
 use bevy_behave::prelude::*;
 
+use crate::planner::PlannedTaskId;
+
 /// A trait derived for all HTN operator structs that get triggered when executing a task.
 pub trait HtnOperator: Reflect + Default + Clone + std::fmt::Debug {
-    fn to_tree(&self) -> Tree<Behave> {
-        behave! { Behave::Wait(1.0) }
-    }
+    /// If this returns a Some(tree), the operator will spawn a behaviour tree.
+    /// If it returns None, the operator will emit a trigger: `HtnTaskExecute<Operator>`
+    fn to_tree(&self) -> Option<Tree<Behave>>;
 }
 
 /// A struct used to operate on reflected [`HtnOperator`] of a type.
@@ -26,8 +28,8 @@ pub struct ReflectHtnOperator(ReflectHtnOperatorFns);
 #[derive(Clone)]
 pub struct ReflectHtnOperatorFns {
     /// Function pointer implementing [`ReflectHtnOperator::trigger()`].
-    pub trigger: fn(&dyn Reflect, Option<Entity>) -> TriggerEmitterCommand,
-    pub to_tree: fn(&dyn Reflect) -> Tree<Behave>,
+    pub trigger: fn(&dyn Reflect, Entity, PlannedTaskId) -> TriggerEmitterCommand,
+    pub to_tree: fn(&dyn Reflect) -> Option<Tree<Behave>>,
 }
 
 impl ReflectHtnOperatorFns {
@@ -43,11 +45,16 @@ impl ReflectHtnOperatorFns {
 
 impl ReflectHtnOperator {
     /// Creates Command that will emit the trigger
-    pub fn trigger(&self, event: &dyn Reflect, entity: Option<Entity>) -> TriggerEmitterCommand {
-        (self.0.trigger)(event, entity)
+    pub fn trigger(
+        &self,
+        event: &dyn Reflect,
+        entity: Entity,
+        task_id: PlannedTaskId,
+    ) -> TriggerEmitterCommand {
+        (self.0.trigger)(event, entity, task_id)
     }
 
-    pub fn to_tree(&self, event: &dyn Reflect) -> Tree<Behave> {
+    pub fn to_tree(&self, event: &dyn Reflect) -> Option<Tree<Behave>> {
         (self.0.to_tree)(event)
     }
 
@@ -65,7 +72,7 @@ impl ReflectHtnOperator {
 impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
     fn from_type() -> Self {
         ReflectHtnOperator(ReflectHtnOperatorFns {
-            trigger: |op, entity| -> TriggerEmitterCommand {
+            trigger: |op, entity, task_id| -> TriggerEmitterCommand {
                 let Some(ev) = op.downcast_ref::<E>() else {
                     panic!("Event is not of type {}", std::any::type_name::<E>());
                 };
@@ -75,18 +82,14 @@ impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
                         let e = HtnTaskExecute {
                             // Fn closure, can't modify captured env, so clone again (they are small)
                             inner: op_event.clone(),
+                            task_id,
                         };
-                        if let Some(entity) = entity {
-                            info!("world.trigger_targets({e:?}, {entity})");
-                            world.trigger_targets(e, entity);
-                        } else {
-                            info!("world.trigger({e:?})");
-                            world.trigger(e);
-                        }
+                        info!("world.trigger_targets({e:?}, {entity})");
+                        world.trigger_targets(e, entity);
                     }),
                 }
             },
-            to_tree: |op| -> Tree<Behave> {
+            to_tree: |op| -> Option<Tree<Behave>> {
                 let Some(ev) = op.downcast_ref::<E>() else {
                     panic!("Event is not of type {}", std::any::type_name::<E>());
                 };
@@ -98,7 +101,18 @@ impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
 
 #[derive(Event, Debug, Clone)]
 pub struct HtnTaskExecute<T: Clone + std::fmt::Debug> {
-    pub inner: T,
+    inner: T,
+    task_id: PlannedTaskId,
+}
+
+impl<T: Clone + std::fmt::Debug> HtnTaskExecute<T> {
+    pub fn inner(&self) -> &T {
+        &self.inner
+    }
+
+    pub fn task_id(&self) -> PlannedTaskId {
+        self.task_id
+    }
 }
 
 pub struct TriggerEmitterCommand {

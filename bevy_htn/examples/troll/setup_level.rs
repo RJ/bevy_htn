@@ -166,7 +166,13 @@ fn setup_bridges(
         Name::new("Bridge3"),
         Text2d::new("Bridge 3"),
     ));
-    rolodex.bridge_positions = vec![bridge1, bridge2, bridge3];
+    // positions are the right offset where we want the troll to stand when checking a bridge
+    let troll_offset = Vec2::new(BRIDGE_WIDTH / 2.0 + 30.0, 0.0);
+    rolodex.bridge_positions = vec![
+        bridge1 + troll_offset,
+        bridge2 + troll_offset,
+        bridge3 + troll_offset,
+    ];
 }
 
 fn setup_troll(

@@ -14,6 +14,7 @@ pest_derive.workspace = true
 thiserror.workspace = true
 bevy_htn_macros.workspace = true
 bevy_behave.workspace = true
+rand.workspace = true
 
 [dev-dependencies]
 bevy = {workspace = true, default-features = true}

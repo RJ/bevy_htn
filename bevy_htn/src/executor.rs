@@ -69,20 +69,23 @@ fn on_exec_next_task<T: Reflect + Component + TypePath>(
     // this will trigger an HtnTaskExecute<Operator> event on our supervisor entity.
     // but if all we're doing is turning it into a tree, maybe do that internally and yield a non-generic trigger that
     // includes the plan name, task id, and tree?
-    if let Some((_cmd, tree)) =
-        task.execution_command(state, &type_registry.read(), Some(t.entity()))
-    {
-        let troll_entity = parent.get();
-        commands
-            .spawn((
-                task_id,
-                BehaveTree::new(tree),
-                BehaveTargetEntity::Entity(troll_entity),
-            ))
-            .set_parent(t.entity());
-        // commands.queue(cmd);
-    } else {
-        error!("Task {task_name} has no execution command");
+    let task_strategy = task.execution_command(state, &type_registry.read(), t.entity(), task_id);
+    match task_strategy {
+        TaskExecutionStrategy::Command(cmd) => {
+            warn!("Executing task: {task_name} via trigger");
+            commands.queue(cmd);
+        }
+        TaskExecutionStrategy::BehaviourTree(tree) => {
+            warn!("Executing task: {task_name} via behaviour tree");
+            let troll_entity = parent.get();
+            commands
+                .spawn((
+                    task_id,
+                    BehaveTree::new(tree),
+                    BehaveTargetEntity::Entity(troll_entity),
+                ))
+                .set_parent(t.entity());
+        }
     }
 }
 

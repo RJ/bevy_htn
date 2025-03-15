@@ -1,4 +1,7 @@
-use crate::prelude::{ReflectHtnOperator, TriggerEmitterCommand};
+use crate::{
+    planner::PlannedTaskId,
+    prelude::{ReflectHtnOperator, TriggerEmitterCommand},
+};
 use bevy::{prelude::*, reflect::TypeRegistry};
 use bevy_behave::prelude::*;
 use std::marker::PhantomData;
@@ -125,6 +128,11 @@ impl<T: Reflect> CompoundTask<T> {
     }
 }
 
+pub enum TaskExecutionStrategy {
+    Command(TriggerEmitterCommand),
+    BehaviourTree(Tree<Behave>),
+}
+
 impl<T: Reflect> PrimitiveTask<T> {
     /// To execute a primitive task is to either:
     /// - insert the operator component into an entity
@@ -138,8 +146,9 @@ impl<T: Reflect> PrimitiveTask<T> {
         &self,
         state: &T,
         type_registry: &TypeRegistry,
-        entity: Option<Entity>,
-    ) -> Option<(TriggerEmitterCommand, Tree<Behave>)> {
+        entity: Entity,
+        task_id: PlannedTaskId,
+    ) -> TaskExecutionStrategy {
         let op_type = self.operator.name();
         let Some(registration) = type_registry.get_with_short_type_path(op_type) else {
             error!("No type registry entry for operator '{op_type}', be sure you've called app.register_type::<{op_type}>()");
@@ -182,10 +191,12 @@ impl<T: Reflect> PrimitiveTask<T> {
             .data::<ReflectHtnOperator>()
             .expect("`ReflectHtnOperator` should be registered");
 
-        let tree = reflect_op.to_tree(boxed_reflect.as_reflect());
-
-        let command = reflect_op.trigger(boxed_reflect.as_reflect(), entity);
-        Some((command, tree))
+        if let Some(tree) = reflect_op.to_tree(boxed_reflect.as_reflect()) {
+            TaskExecutionStrategy::BehaviourTree(tree)
+        } else {
+            let command = reflect_op.trigger(boxed_reflect.as_reflect(), entity, task_id);
+            TaskExecutionStrategy::Command(command)
+        }
     }
 
     /// Checks that every operator has the correct type registry entries and that any fields used

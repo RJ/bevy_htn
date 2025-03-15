@@ -8,7 +8,11 @@ pub fn derive_htn_operator(input: TokenStream) -> TokenStream {
 
     let name = &input.ident;
     let expanded = quote! {
-        impl HtnOperator for #name {}
+        impl HtnOperator for #name {
+            fn to_tree(&self) -> Option<Tree<Behave>> {
+                None
+            }
+        }
     };
     TokenStream::from(expanded)
 }
