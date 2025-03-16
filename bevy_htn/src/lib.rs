@@ -4,6 +4,8 @@ mod htn;
 mod htn_assets;
 mod planner;
 mod reflect_operator;
+#[cfg(test)]
+mod tests;
 
 pub mod prelude {
     pub use super::dsl::*;

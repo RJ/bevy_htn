@@ -13,11 +13,21 @@ pub enum HtnCondition {
     GreaterThanInt {
         field: String,
         threshold: i32,
+        orequals: bool,
+    },
+    LessThanInt {
+        field: String,
+        threshold: i32,
+        orequals: bool,
     },
     EqualsEnum {
         field: String,
         enum_type: String,
         enum_variant: String,
+    },
+    EqualsInt {
+        field: String,
+        value: i32,
     },
 }
 
@@ -43,10 +53,48 @@ impl HtnCondition {
                     false
                 }
             }
-            HtnCondition::GreaterThanInt { field, threshold } => {
+            HtnCondition::GreaterThanInt {
+                field,
+                threshold,
+                orequals,
+            } => {
                 if let Some(val) = reflected.field(field) {
                     if let Some(i) = val.try_downcast_ref::<i32>() {
-                        *i > *threshold
+                        if *orequals {
+                            *i >= *threshold
+                        } else {
+                            *i > *threshold
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            HtnCondition::LessThanInt {
+                field,
+                threshold,
+                orequals,
+            } => {
+                if let Some(val) = reflected.field(field) {
+                    if let Some(i) = val.try_downcast_ref::<i32>() {
+                        if *orequals {
+                            *i <= *threshold
+                        } else {
+                            *i < *threshold
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            HtnCondition::EqualsInt { field, value } => {
+                if let Some(val) = reflected.field(field) {
+                    if let Some(i) = val.try_downcast_ref::<i32>() {
+                        *i == *value
                     } else {
                         false
                     }

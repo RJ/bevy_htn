@@ -1,6 +1,5 @@
-use super::*;
 use crate::prelude::*;
-
+use bevy::prelude::*;
 trait AppTestExt {
     fn atr(&self) -> &AppTypeRegistry;
 }
@@ -24,6 +23,7 @@ enum Location {
 struct TestState {
     tog: bool,
     location: Location,
+    counter: i32,
 }
 
 #[derive(Debug, Reflect, Default, Clone, HtnOperator)]
@@ -76,6 +76,19 @@ fn test_cond_bool() {
 }
 
 #[test]
+fn test_cond_int() {
+    let app = setup_app();
+    let mut state = TestState::default();
+    let cond = HtnCondition::EqualsInt {
+        field: "counter".to_string(),
+        value: 0,
+    };
+    assert!(cond.evaluate(&state, app.atr()));
+    state.counter = 1;
+    assert!(!cond.evaluate(&state, app.atr()));
+}
+
+#[test]
 fn test_cond_enum() {
     let app = setup_app();
     let mut state = TestState::default();
@@ -92,42 +105,74 @@ fn test_cond_enum() {
 #[test]
 fn test_parser() {
     let src = r#"
-    primitive_task "test_operator1" {
-        operator: trigger: TestOperator1;
+    primitive_task "TestTask1" {
+        operator: TestOperator1;
         precondition: tog == false;
-        effect: set tog = true;
-        expected_effect: set location = Location::Work;
+        effect: tog = true;
+        effect: counter -= 1;
+        expected_effect: location = Location::Work;
+    }
+    compound_task "CompoundTask1" {
+        method {
+            precondition: tog == true;
+            subtask: TestTask1;
+        }
+        method {
+            subtask: FooTask;
+        }
     }
     "#;
     let htn = parse_htn::<TestState>(src);
-    assert_eq!(htn.tasks.len(), 1);
-    let Task::Primitive(task) = &htn.tasks[0] else {
+    assert_eq!(htn.tasks.len(), 2);
+    let Task::Primitive(task1) = &htn.tasks[0] else {
         panic!("Task is not a primitive");
     };
-    assert_eq!(task.name, "test_operator1");
-    assert_eq!(task.preconditions.len(), 1);
-    assert_eq!(task.effects.len(), 1);
-    assert_eq!(task.expected_effects.len(), 1);
+    assert_eq!(task1.name, "TestTask1");
+    assert_eq!(task1.preconditions.len(), 1);
+    assert_eq!(task1.effects.len(), 2);
+    assert_eq!(task1.expected_effects.len(), 1);
     assert_eq!(
-        task.preconditions[0],
+        task1.preconditions[0],
         HtnCondition::EqualsBool {
             field: "tog".to_string(),
             value: false,
         }
     );
     assert_eq!(
-        task.effects[0],
-        Effect::SetBool {
-            field: "tog".to_string(),
-            value: true,
-        }
+        task1.effects,
+        vec![
+            Effect::SetBool {
+                field: "tog".to_string(),
+                value: true,
+            },
+            Effect::IncrementInt {
+                field: "counter".to_string(),
+                by: -1,
+            },
+        ]
     );
     assert_eq!(
-        task.expected_effects[0],
+        task1.expected_effects[0],
         Effect::SetEnum {
             field: "location".to_string(),
             enum_type: "Location".into(),
             enum_variant: "Work".into(),
         }
     );
+    let Task::Compound(task2) = &htn.tasks[1] else {
+        panic!("Task is not a compound");
+    };
+    assert_eq!(task2.name, "CompoundTask1");
+    assert_eq!(task2.methods.len(), 2);
+    assert_eq!(
+        task2.methods[0].preconditions,
+        vec![HtnCondition::EqualsBool {
+            field: "tog".to_string(),
+            value: true,
+        }]
+    );
+    assert_eq!(task2.methods[1].preconditions, vec![]);
+
+    assert_eq!(task2.methods[0].subtasks, vec!["TestTask1".to_string()]);
+    assert_eq!(task2.methods[1].subtasks, vec!["FooTask".to_string()]);
 }

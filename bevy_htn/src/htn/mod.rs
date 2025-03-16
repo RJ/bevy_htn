@@ -3,8 +3,6 @@ mod effects;
 mod htn_builder;
 mod task_compound;
 mod task_primitive;
-#[cfg(test)]
-mod tests;
 
 pub use conditions::*;
 pub use effects::*;

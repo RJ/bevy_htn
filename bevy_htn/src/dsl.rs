@@ -15,9 +15,37 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
     let val_str = inner.next().unwrap().as_str();
 
     match op {
+        ">=" => {
+            let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
+            HtnCondition::GreaterThanInt {
+                field,
+                threshold,
+                orequals: true,
+            }
+        }
         ">" => {
             let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
-            HtnCondition::GreaterThanInt { field, threshold }
+            HtnCondition::GreaterThanInt {
+                field,
+                threshold,
+                orequals: false,
+            }
+        }
+        "<=" => {
+            let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
+            HtnCondition::LessThanInt {
+                field,
+                threshold,
+                orequals: true,
+            }
+        }
+        "<" => {
+            let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
+            HtnCondition::LessThanInt {
+                field,
+                threshold,
+                orequals: false,
+            }
         }
         "==" => {
             if val_str.contains("::") {
@@ -29,7 +57,12 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                     enum_type,
                     enum_variant,
                 }
-            } else {
+            } else if let Ok(int_val) = val_str.parse::<i32>() {
+                HtnCondition::EqualsInt {
+                    field,
+                    value: int_val,
+                }
+            } else if val_str == "true" || val_str == "false" {
                 let bool_val = match val_str {
                     "true" => true,
                     "false" => false,
@@ -39,6 +72,8 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                     field,
                     value: bool_val,
                 }
+            } else {
+                panic!("Unsupported operator: {}", op);
             }
         }
         _ => panic!("Unsupported operator: {}", op),
@@ -47,7 +82,8 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
 
 fn parse_effect(pair: Pair<Rule>) -> Effect {
     let inner_pair = pair.into_inner().next().unwrap();
-    match inner_pair.as_rule() {
+    let rule = inner_pair.as_rule();
+    match rule {
         Rule::set_effect => {
             let mut parts = inner_pair.into_inner();
             let field = parts.next().unwrap().as_str().to_string();
@@ -81,14 +117,18 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
                 }
             }
         }
-        Rule::inc_effect => {
+        Rule::inc_effect | Rule::dec_effect => {
             let mut parts = inner_pair.into_inner();
             let field = parts.next().unwrap().as_str().to_string();
             let amt_str = parts.next().unwrap().as_str();
             let amount = amt_str
                 .parse::<i32>()
                 .expect("Invalid integer in inc effect");
-            Effect::IncrementInt { field, by: amount }
+            if rule == Rule::dec_effect {
+                Effect::IncrementInt { field, by: -amount }
+            } else {
+                Effect::IncrementInt { field, by: amount }
+            }
         }
         _ => panic!("Unsupported effect type"),
     }
@@ -103,35 +143,15 @@ fn parse_primitive_task<T: Reflect>(pair: Pair<Rule>) -> PrimitiveTask<T> {
         match stmt.as_rule() {
             Rule::operator_statement => {
                 let mut op_inner = stmt.into_inner();
-                let op_type = op_inner.next().unwrap();
-
-                match op_type.as_rule() {
-                    Rule::spawn_operator => {
-                        let op_def = op_type.into_inner().next().unwrap();
-                        let mut op_parts = op_def.into_inner();
-                        let op_name = op_parts.next().unwrap().as_str().to_string();
-                        let params: Vec<String> =
-                            op_parts.map(|param| param.as_str().to_string()).collect();
-
-                        builder = builder.operator(Operator::Spawn {
-                            name: op_name,
-                            params,
-                        });
-                    }
-                    Rule::trigger_operator => {
-                        let op_def = op_type.into_inner().next().unwrap();
-                        let mut op_parts = op_def.into_inner();
-                        let op_name = op_parts.next().unwrap().as_str().to_string();
-                        let params: Vec<String> =
-                            op_parts.map(|param| param.as_str().to_string()).collect();
-
-                        builder = builder.operator(Operator::Trigger {
-                            name: op_name,
-                            params,
-                        });
-                    }
-                    _ => unreachable!("Invalid operator type"),
-                }
+                let op_def = op_inner.next().unwrap();
+                let mut op_parts = op_def.into_inner();
+                let op_name = op_parts.next().unwrap().as_str().to_string();
+                let params: Vec<String> =
+                    op_parts.map(|param| param.as_str().to_string()).collect();
+                builder = builder.operator(Operator::Trigger {
+                    name: op_name,
+                    params,
+                });
             }
             Rule::effect_statement => {
                 let effect = stmt

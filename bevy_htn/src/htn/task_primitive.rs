@@ -12,20 +12,17 @@ pub enum TaskExecutionStrategy {
 
 #[derive(Clone, Debug, Reflect)]
 pub enum Operator {
-    Spawn { name: String, params: Vec<String> },
     Trigger { name: String, params: Vec<String> },
 }
 
 impl Operator {
     pub fn name(&self) -> &str {
         match self {
-            Operator::Spawn { name, .. } => name,
             Operator::Trigger { name, .. } => name,
         }
     }
     pub fn params(&self) -> &[String] {
         match self {
-            Operator::Spawn { params, .. } => params,
             Operator::Trigger { params, .. } => params,
         }
     }
