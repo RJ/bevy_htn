@@ -14,6 +14,7 @@ pub mod prelude {
     pub use super::reflect_operator::*;
     pub use super::HtnPlugin;
     pub use bevy_behave;
+    pub use bevy_behave::prelude::*;
     pub use bevy_htn_macros::HtnOperator;
 }
 

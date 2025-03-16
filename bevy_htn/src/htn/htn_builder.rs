@@ -1,32 +1,5 @@
 use super::*;
-use bevy::{
-    prelude::*,
-    reflect::{TypeRegistration, TypeRegistry},
-};
-use std::sync::RwLockReadGuard;
-
-/// A wrapper around the TypeRegistry with some convenience methods.
-pub struct Mirror<'a> {
-    app_type_registry: &'a AppTypeRegistry,
-}
-
-impl<'a> Mirror<'a> {
-    pub fn new(app_type_registry: &'a AppTypeRegistry) -> Self {
-        Self { app_type_registry }
-    }
-    pub fn type_registry(&self) -> RwLockReadGuard<'_, TypeRegistry> {
-        let app_type_registry = self.app_type_registry;
-        app_type_registry.read()
-    }
-    /// get a type registration for the type
-    pub fn get_type_by_name(&self, type_name: String) -> Option<TypeRegistration> {
-        let type_registry = self.type_registry();
-        type_registry
-            .get_with_short_type_path(&type_name)
-            .or_else(|| type_registry.get_with_type_path(&type_name))
-            .cloned()
-    }
-}
+use bevy::prelude::*;
 
 /// This is the HTN domain - a list of all the compound and primitive tasks.
 #[derive(Debug, Reflect, Clone)]
@@ -54,10 +27,10 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
 
     /// Verifies that every operator has the correct type registry entries and that any fields used
     /// by operators are also present in the state.
-    pub fn verify_operators(&self, state: &T, type_registry: &TypeRegistry) -> Result<(), String> {
+    pub fn verify_operators(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
         for task in self.tasks.iter() {
             match task {
-                Task::Primitive(primitive) => primitive.verify_operator(state, type_registry)?,
+                Task::Primitive(primitive) => primitive.verify_operator(state, atr)?,
                 Task::Compound(_) => continue,
             }
         }
@@ -82,10 +55,10 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
 
     /// Verifies that every operator has the correct type registry entries and that any fields used
     /// by operators are also present in the state.
-    pub fn verify_operators(self, state: &T, type_registry: &TypeRegistry) -> Result<Self, String> {
+    pub fn verify_operators(self, state: &T, atr: &AppTypeRegistry) -> Result<Self, String> {
         for task in self.tasks.iter() {
             match task {
-                Task::Primitive(primitive) => primitive.verify_operator(state, type_registry)?,
+                Task::Primitive(primitive) => primitive.verify_operator(state, atr)?,
                 Task::Compound(_) => continue,
             }
         }

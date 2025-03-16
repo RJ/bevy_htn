@@ -107,18 +107,18 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
         }
     }
 
-    pub fn apply_effects(&self, state: &mut T, mirror: &Mirror) {
+    pub fn apply_effects(&self, state: &mut T, atr: &AppTypeRegistry) {
         for effect in self.effects.iter() {
             info!("APPLY: {effect:?}");
-            effect.apply(state, mirror);
+            effect.apply(state, atr);
         }
     }
 
     /// Checks that every operator has the correct type registry entries and that any fields used
     /// by operators are also present in the state.
-    pub fn verify_operator(&self, state: &T, type_registry: &TypeRegistry) -> Result<(), String> {
+    pub fn verify_operator(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
         let op_type = self.operator.name();
-        let Some(registration) = type_registry.get_with_short_type_path(op_type) else {
+        let Some(registration) = atr.get_type_by_name(op_type) else {
             return Err(format!("No type registry entry for operator '{op_type}'"));
         };
         if registration.data::<ReflectDefault>().is_none() {
@@ -147,10 +147,10 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
     }
 
     /// Returns true if all preconditions are met.
-    pub fn preconditions_met(&self, state: &T, mirror: &Mirror) -> bool {
+    pub fn preconditions_met(&self, state: &T, atr: &AppTypeRegistry) -> bool {
         self.preconditions
             .iter()
-            .all(|cond| cond.evaluate(state, mirror))
+            .all(|cond| cond.evaluate(state, atr))
     }
 }
 

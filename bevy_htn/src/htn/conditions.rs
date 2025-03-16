@@ -4,7 +4,7 @@ use bevy::{
     reflect::{DynamicEnum, DynamicVariant, VariantInfo},
 };
 
-#[derive(Clone, Debug, Reflect)]
+#[derive(Clone, Debug, Reflect, PartialEq, Eq)]
 pub enum HtnCondition {
     EqualsBool {
         field: String,
@@ -25,7 +25,7 @@ impl HtnCondition {
     pub fn evaluate<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
         &self,
         state: &T,
-        mirror: &Mirror,
+        atr: &AppTypeRegistry,
     ) -> bool {
         let reflected = state
             .reflect_ref()
@@ -72,8 +72,8 @@ impl HtnCondition {
                         VariantInfo::Unit(_) => DynamicVariant::Unit,
                     };
                     let mut dynamic = DynamicEnum::new(enum_variant.clone(), variant);
-                    let type_reg = mirror
-                        .get_type_by_name(enum_type.to_string())
+                    let type_reg = atr
+                        .get_type_by_name(enum_type)
                         .expect("Enum type not found");
                     dynamic.set_represented_type(Some(type_reg.type_info()));
                     dynamic.reflect_partial_eq(val).unwrap()

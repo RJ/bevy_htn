@@ -151,17 +151,17 @@ pub struct HtnPlanner<'a, T: Reflect + Default + TypePath + Clone + core::fmt::D
     task_stack: VecDeque<String>,
     decomp_stack: Vec<DecompositionState>,
     method_index: usize,
-    mirror: Mirror<'a>,
+    atr: &'a AppTypeRegistry,
 }
 
 impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<'a, T> {
-    pub fn new(htn: &'a HTN<T>, mirror: Mirror<'a>) -> Self {
+    pub fn new(htn: &'a HTN<T>, atr: &'a AppTypeRegistry) -> Self {
         Self {
             task_stack: VecDeque::new(),
             htn,
             decomp_stack: Vec::new(),
             method_index: 0,
-            mirror,
+            atr,
         }
     }
 
@@ -200,7 +200,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                 Task::Compound(compound) => {
                     // find the first method with passing preconditions
                     if let Some((method, method_index)) =
-                        compound.find_method(&state, self.method_index, &self.mirror)
+                        compound.find_method(&state, self.method_index, self.atr)
                     {
                         // info!("Compound task {current_task_name} has valid method {method_index}: {method:?}");
                         // record decomposition
@@ -221,13 +221,13 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                     }
                 }
                 Task::Primitive(primitive) => {
-                    if primitive.preconditions_met(&state, &self.mirror) {
+                    if primitive.preconditions_met(&state, self.atr) {
                         // info!("Adding primitive task to plan: {current_task_name}");
                         // add task to final plan
                         final_plan.push(current_task_name);
                         // apply this task's effects to the working world state
                         for effect in primitive.effects.iter() {
-                            effect.apply(&mut state, &self.mirror);
+                            effect.apply(&mut state, self.atr);
                         }
                         // info!("Working state is now: {state:?}");
                         continue;

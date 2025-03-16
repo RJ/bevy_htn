@@ -199,7 +199,7 @@ fn replan_checker(
         Or<(Added<GameState>, Changed<GameState>)>,
     >,
     mut commands: Commands,
-    app_type_registry: Res<AppTypeRegistry>,
+    atr: Res<AppTypeRegistry>,
 ) {
     let Ok((sup_entity, htn_supervisor, _parent, state, opt_plan)) = q.get_single() else {
         return;
@@ -213,7 +213,7 @@ fn replan_checker(
     // let type_registry = type_registry.read();
 
     // info!("Planning - Initial State:\n{:#?}", state);
-    let mut planner = HtnPlanner::new(htn, Mirror::new(&app_type_registry));
+    let mut planner = HtnPlanner::new(htn, atr.as_ref());
     let plan = planner.plan(state);
 
     if let Some(existing_plan) = opt_plan {

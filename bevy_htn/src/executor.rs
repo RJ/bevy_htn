@@ -55,7 +55,7 @@ fn on_task_complete<T: Reflect + Component + TypePath + Default + Clone + core::
     t: Trigger<TaskComplete>,
     mut q: Query<(&mut Plan, &HtnSupervisor<T>, &mut T)>,
     assets: Res<Assets<HtnAsset<T>>>,
-    type_registry: Res<AppTypeRegistry>,
+    atr: Res<AppTypeRegistry>,
     mut commands: Commands,
 ) {
     info!("Task complete event: {t:?}");
@@ -76,11 +76,10 @@ fn on_task_complete<T: Reflect + Component + TypePath + Default + Clone + core::
     };
     plan.report_task_completion(task_id, *success);
     if *success {
-        let mirror = Mirror::new(&type_registry);
         match task {
             Task::Primitive(primitive) => {
                 warn!("Applying effects for primitive task: {task_id:?}");
-                primitive.apply_effects(&mut state, &mirror);
+                primitive.apply_effects(&mut state, atr.as_ref());
             }
             Task::Compound(_compound) => {}
         }

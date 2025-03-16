@@ -4,7 +4,7 @@ use bevy::{
     reflect::{DynamicEnum, DynamicVariant, VariantInfo},
 };
 
-#[derive(Clone, Debug, Reflect)]
+#[derive(Clone, Debug, Reflect, PartialEq, Eq)]
 pub enum Effect {
     SetBool {
         field: String,
@@ -33,7 +33,7 @@ impl Effect {
     pub fn apply<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
         &self,
         state: &mut T,
-        mirror: &Mirror,
+        atr: &AppTypeRegistry,
     ) {
         let reflected = state
             .reflect_mut()
@@ -84,8 +84,8 @@ impl Effect {
                     };
                     // construct the new value:
                     let mut new_dyn_enum = DynamicEnum::new(enum_variant.clone(), variant);
-                    let type_reg = mirror
-                        .get_type_by_name(enum_type.to_string())
+                    let type_reg = atr
+                        .get_type_by_name(enum_type)
                         .expect("Enum type not found");
                     new_dyn_enum.set_represented_type(Some(type_reg.type_info()));
                     state_dyn_enum.apply(new_dyn_enum.as_partial_reflect());

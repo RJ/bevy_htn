@@ -22,7 +22,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> CompoundTask<T>
         &self,
         state: &T,
         skip: usize,
-        mirror: &Mirror,
+        atr: &AppTypeRegistry,
     ) -> Option<(&Method<T>, usize)> {
         self.methods
             .iter()
@@ -32,7 +32,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> CompoundTask<T>
                 method
                     .preconditions
                     .iter()
-                    .all(|cond| cond.evaluate(state, mirror))
+                    .all(|cond| cond.evaluate(state, atr))
             })
             .map(|(i, method)| (method, i))
     }
