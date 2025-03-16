@@ -30,16 +30,20 @@ compound_task "AttackEnemy" {
 }
 
 primitive_task "DoTrunkSlam" {
+    precondition: within_melee_range == true;
+    precondition: trunk_health > 0;
     operator:
         spawn: DoTrunkSlamOperator;
     effect: inc trunk_health by -1;
 }
 
 primitive_task "UprootTrunk" {
+    precondition: within_trunk_pickup_range == true;
     operator:
         spawn: UprootTrunkOperator;
     effect: set trunk_health = 3;
     effect: set found_trunk = false;
+    effect: set within_trunk_pickup_range = false;
 }
 
 primitive_task "FindTrunk" {
@@ -51,13 +55,13 @@ primitive_task "FindTrunk" {
 primitive_task "NavigateToTrunk" {
     operator:
         spawn: NavigateToOperator(found_trunk_location);
-    effect: set location = found_trunk_location;
+    effect: set within_trunk_pickup_range = true;
 }
 
 primitive_task "NavigateToEnemy" {
     operator:
         spawn: NavigateToOperator(last_enemy_location);
-    effect: set location = last_enemy_location;
+    expected_effect: set within_melee_range = true;
 }
 
 primitive_task "NavigateToLastEnemyLoc" {
@@ -65,6 +69,7 @@ primitive_task "NavigateToLastEnemyLoc" {
         spawn: NavigateToOperator(last_enemy_location);
     effect: set location = last_enemy_location;
     expected_effect: set can_see_enemy = true;
+    expected_effect: set within_melee_range = true;
 }
 
 primitive_task "RegainLOSRoar" {

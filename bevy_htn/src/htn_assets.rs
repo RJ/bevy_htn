@@ -11,7 +11,7 @@ struct HtnAssetLoader<T: Reflect + TypePath + Default> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + TypePath + Default> AssetLoader for HtnAssetLoader<T> {
+impl<T: Reflect + TypePath + Default + Clone + core::fmt::Debug> AssetLoader for HtnAssetLoader<T> {
     type Asset = HtnAsset<T>;
     type Settings = ();
     type Error = HtnAssetError;
@@ -36,7 +36,7 @@ impl<T: Reflect + TypePath + Default> AssetLoader for HtnAssetLoader<T> {
 }
 
 #[derive(Asset, TypePath)]
-pub struct HtnAsset<T: Reflect + TypePath> {
+pub struct HtnAsset<T: Reflect + TypePath + Default + Clone + core::fmt::Debug> {
     pub htn: HTN<T>,
 }
 
@@ -53,7 +53,7 @@ pub struct HtnAssetPlugin<T: Reflect + TypePath + Default> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + TypePath + Default> Plugin for HtnAssetPlugin<T> {
+impl<T: Reflect + TypePath + Default + Clone + core::fmt::Debug> Plugin for HtnAssetPlugin<T> {
     fn build(&self, app: &mut App) {
         app.init_asset_loader::<HtnAssetLoader<T>>();
         app.init_asset::<HtnAsset<T>>();

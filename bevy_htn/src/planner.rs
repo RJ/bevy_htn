@@ -19,7 +19,7 @@ impl Plan {
             .map(|(idx, name)| PlannedTask {
                 name: name.clone(),
                 status: TaskStatus::NotStarted,
-                id: PlannedTaskId(plan_id, idx),
+                id: PlannedTaskId::new(plan_id, idx, name.clone()),
             })
             .collect();
         Self {
@@ -31,8 +31,8 @@ impl Plan {
     pub fn id(&self) -> u32 {
         self.plan_id
     }
-    /// Marks next task as running and returns the task id and name.
-    pub fn execute_next_task(&mut self) -> Option<(PlannedTaskId, String)> {
+    /// Marks next task as running and returns the planned task id
+    pub fn execute_next_task(&mut self) -> Option<PlannedTaskId> {
         if self.next_task_index >= self.tasks.len() {
             info!("Plan complete, no next task.");
             return None;
@@ -40,15 +40,15 @@ impl Plan {
         let task = &mut self.tasks[self.next_task_index];
         task.status = TaskStatus::Running;
         self.next_task_index += 1;
-        Some((task.id, task.name.clone()))
+        Some(task.id.clone())
     }
 
-    pub fn report_task_completion(&mut self, task_id: PlannedTaskId, success: bool) {
+    pub fn report_task_completion(&mut self, task_id: &PlannedTaskId, success: bool) {
         if let Some((idx, task)) = self
             .tasks
             .iter_mut()
             .enumerate()
-            .find(|(_idx, t)| t.id == task_id)
+            .find(|(_idx, t)| t.id == *task_id)
         {
             info!(
                 "Report task completion: {task_id:?} {} = {success}",
@@ -98,8 +98,31 @@ impl PartialEq for Plan {
 impl Eq for Plan {}
 
 /// A unique id of a task in a plan, comprised of the plan id and the index of the task in the plan.
-#[derive(Reflect, Clone, Copy, Debug, Component, PartialEq)]
-pub struct PlannedTaskId(u32, usize);
+#[derive(Reflect, Clone, Debug, Component, PartialEq)]
+pub struct PlannedTaskId {
+    plan_id: u32,
+    index: usize,
+    name: String,
+}
+
+impl PlannedTaskId {
+    pub fn new(plan_id: u32, index: usize, name: String) -> Self {
+        Self {
+            plan_id,
+            index,
+            name,
+        }
+    }
+    pub fn plan_id(&self) -> u32 {
+        self.plan_id
+    }
+    pub fn index(&self) -> usize {
+        self.index
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
 
 #[derive(Reflect, Clone, Debug)]
 pub struct PlannedTask {
@@ -122,20 +145,23 @@ struct DecompositionState {
     final_plan: Vec<String>,
     next_method_index: usize,
 }
+
 pub struct HtnPlanner<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
     htn: &'a HTN<T>,
     task_stack: VecDeque<String>,
     decomp_stack: Vec<DecompositionState>,
     method_index: usize,
+    mirror: Mirror<'a>,
 }
 
 impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<'a, T> {
-    pub fn new(htn: &'a HTN<T>) -> Self {
+    pub fn new(htn: &'a HTN<T>, mirror: Mirror<'a>) -> Self {
         Self {
             task_stack: VecDeque::new(),
             htn,
             decomp_stack: Vec::new(),
             method_index: 0,
+            mirror,
         }
     }
 
@@ -174,7 +200,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                 Task::Compound(compound) => {
                     // find the first method with passing preconditions
                     if let Some((method, method_index)) =
-                        compound.find_method(&state, self.method_index)
+                        compound.find_method(&state, self.method_index, &self.mirror)
                     {
                         // info!("Compound task {current_task_name} has valid method {method_index}: {method:?}");
                         // record decomposition
@@ -195,13 +221,13 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                     }
                 }
                 Task::Primitive(primitive) => {
-                    if primitive.preconditions_met(&state) {
+                    if primitive.preconditions_met(&state, &self.mirror) {
                         // info!("Adding primitive task to plan: {current_task_name}");
                         // add task to final plan
                         final_plan.push(current_task_name);
                         // apply this task's effects to the working world state
                         for effect in primitive.effects.iter() {
-                            effect.apply(&mut state);
+                            effect.apply(&mut state, &self.mirror);
                         }
                         // info!("Working state is now: {state:?}");
                         continue;

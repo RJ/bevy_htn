@@ -52,14 +52,18 @@ pub fn setup_operators_plugin(app: &mut App) {
 fn on_choose_bridge_to_check(
     t: Trigger<HtnTaskExecute<ChooseBridgeToCheckOperator>>,
     mut q: Query<(&mut GameState, &mut Plan)>,
+    mut commands: Commands,
 ) {
     info!("ChooseBridgeToCheckOperator {}", t.entity());
-    let (mut state, mut plan) = q.get_mut(t.entity()).unwrap();
+    let (mut state, mut _plan) = q.get_mut(t.entity()).unwrap();
     state.next_bridge_to_check = 1 + (state.next_bridge_to_check + 1) % 3;
     // this needs to exec the next task somehow:
     // maybe trigger a report we get from the trigger to centralize reporting status,
     // so we can trigger the next task?
     //
     // or have this report update aplan internal "next job" thing we can pop off in the replan checker
-    plan.report_task_completion(t.task_id(), true);
+    commands.trigger_targets(
+        TaskComplete::new(t.event().task_id().clone(), true),
+        t.event().entity(),
+    );
 }

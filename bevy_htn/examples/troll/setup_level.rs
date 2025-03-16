@@ -114,6 +114,8 @@ pub const BRIDGE_HEIGHT: f32 = 40.0;
 pub const BRIDGE_SPACING: f32 = 70.0;
 pub const BRIDGE_DIST: f32 = 120.0;
 pub const TROLL_VISION_RADIUS: f32 = 300.0;
+pub const TROLL_MELEE_RANGE: f32 = 50.0;
+pub const TRUNK_PICKUP_RANGE: f32 = 60.0;
 
 #[derive(Component, Debug)]
 pub struct Bridge;

@@ -82,7 +82,8 @@ impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
                         let e = HtnTaskExecute {
                             // Fn closure, can't modify captured env, so clone again (they are small)
                             inner: op_event.clone(),
-                            task_id,
+                            task_id: task_id.clone(),
+                            entity,
                         };
                         info!("world.trigger_targets({e:?}, {entity})");
                         world.trigger_targets(e, entity);
@@ -103,6 +104,7 @@ impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
 pub struct HtnTaskExecute<T: Clone + std::fmt::Debug> {
     inner: T,
     task_id: PlannedTaskId,
+    entity: Entity,
 }
 
 impl<T: Clone + std::fmt::Debug> HtnTaskExecute<T> {
@@ -110,8 +112,12 @@ impl<T: Clone + std::fmt::Debug> HtnTaskExecute<T> {
         &self.inner
     }
 
-    pub fn task_id(&self) -> PlannedTaskId {
-        self.task_id
+    pub fn task_id(&self) -> &PlannedTaskId {
+        &self.task_id
+    }
+
+    pub fn entity(&self) -> Entity {
+        self.entity
     }
 }
 

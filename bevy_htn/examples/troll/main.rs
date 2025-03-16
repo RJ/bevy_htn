@@ -15,9 +15,22 @@ use setup_level::*;
 mod operators;
 use operators::*;
 
+#[derive(Reflect, Clone, Debug, Default)]
+#[reflect(Default)]
+pub enum Location {
+    #[default]
+    Unknown,
+    Player,
+    Trunk,
+    Bridge1,
+    Bridge2,
+    Bridge3,
+}
+
 #[derive(Reflect, Component, Clone, Debug, Default, InspectorOptions)]
 #[reflect(Default, Component, InspectorOptions)]
 pub struct GameState {
+    pub location_enum: Location,
     pub location: Vec2,
     #[inspector(min = 0, max = 3, display = NumberDisplay::Slider)]
     pub trunk_health: i32,
@@ -30,6 +43,8 @@ pub struct GameState {
     pub has_seen_enemy_recently: bool,
     pub last_enemy_location: Vec2,
     pub next_bridge_to_check: usize,
+    pub within_melee_range: bool,
+    pub within_trunk_pickup_range: bool,
     pub dummy_field: bool,
 }
 
@@ -56,6 +71,7 @@ fn main() {
 
 fn initial_gamestate() -> GameState {
     GameState {
+        location_enum: Location::Unknown,
         location: Vec2::new(1., 1.),
         trunk_health: 3,
         found_trunk: false,
@@ -65,15 +81,20 @@ fn initial_gamestate() -> GameState {
         can_see_enemy: true,
         has_seen_enemy_recently: false,
         last_enemy_location: Vec2::new(666., 666.),
-        next_bridge_to_check: 0,
+        next_bridge_to_check: 1,
+        within_melee_range: false,
+        within_trunk_pickup_range: false,
         dummy_field: false,
     }
 }
 
+// doing check and set here to avoid triggering change detection by setting a field
+// to it's existing value.
 fn troll_enemy_vision_sensor(
     mut q: Query<&mut GameState>,
     q_troll: Query<&Transform, With<Troll>>,
     q_player: Query<&Transform, With<Player>>,
+    q_trunks: Query<&Transform, With<Trunk>>,
     mut last_seen: Local<f32>,
     time: Res<Time>,
 ) {
@@ -104,6 +125,26 @@ fn troll_enemy_vision_sensor(
     }
     if can_see_enemy && state.last_enemy_location != player_transform.translation.xy() {
         state.bypass_change_detection().last_enemy_location = player_transform.translation.xy();
+    }
+
+    let within_melee_range = distance < TROLL_MELEE_RANGE;
+    if state.within_melee_range != within_melee_range {
+        state.within_melee_range = within_melee_range;
+    }
+
+    let mut within_trunk_pickup_range = false;
+    for trunk_transform in q_trunks.iter() {
+        let distance = troll_transform
+            .translation
+            .xy()
+            .distance(trunk_transform.translation.xy());
+        if distance < TRUNK_PICKUP_RANGE {
+            within_trunk_pickup_range = true;
+            break;
+        }
+    }
+    if state.within_trunk_pickup_range != within_trunk_pickup_range {
+        state.within_trunk_pickup_range = within_trunk_pickup_range;
     }
 }
 
@@ -147,10 +188,10 @@ fn print_htn(assets: Res<Assets<HtnAsset<GameState>>>, rolodex: Res<Rolodex>) {
 fn replan_checker(
     assets: Res<Assets<HtnAsset<GameState>>>,
     _rolodex: Res<Rolodex>,
-    mut q: Query<
+    q: Query<
         (
             Entity,
-            &mut HtnSupervisor<GameState>,
+            &HtnSupervisor<GameState>,
             &Parent,
             &GameState,
             Option<&Plan>,
@@ -158,9 +199,9 @@ fn replan_checker(
         Or<(Added<GameState>, Changed<GameState>)>,
     >,
     mut commands: Commands,
-    // type_registry: Res<AppTypeRegistry>,
+    app_type_registry: Res<AppTypeRegistry>,
 ) {
-    let Ok((sup_entity, mut htn_supervisor, _parent, state, opt_plan)) = q.get_single_mut() else {
+    let Ok((sup_entity, htn_supervisor, _parent, state, opt_plan)) = q.get_single() else {
         return;
     };
     let Some(htn_asset) = assets.get(&htn_supervisor.htn_handle) else {
@@ -172,7 +213,7 @@ fn replan_checker(
     // let type_registry = type_registry.read();
 
     // info!("Planning - Initial State:\n{:#?}", state);
-    let mut planner = HtnPlanner::new(htn);
+    let mut planner = HtnPlanner::new(htn, Mirror::new(&app_type_registry));
     let plan = planner.plan(state);
 
     if let Some(existing_plan) = opt_plan {

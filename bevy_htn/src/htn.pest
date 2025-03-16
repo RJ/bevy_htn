@@ -1,8 +1,8 @@
 WHITESPACE = _{ " " | "\t" | "\n" }
 
-primitive_task         =  { "primitive_task" ~ STRING ~ "{" ~ (operator_statement | effect_statement | expected_effect_statement | precondition_statement)* ~ "}" }
-compound_task          =  { "compound_task" ~ STRING ~ "{" ~ method* ~ "}" }
-method                 =  { "method" ~ "{" ~ (precondition_statement | subtask_statement)* ~ "}" }
+primitive_task         =  { "primitive_task" ~ STRING ~ "{" ~ (comment | operator_statement | effect_statement | expected_effect_statement | precondition_statement)* ~ "}" }
+compound_task          =  { "compound_task" ~ STRING ~ "{" ~ (comment |  method)* ~ "}" }
+method                 =  { "method" ~ "{" ~ (comment | precondition_statement | subtask_statement)* ~ "}" }
 subtask_statement      =  { "subtask:" ~ identifier ~ ";" }
 precondition_statement =  { "precondition:" ~ condition ~ ";" }
 effect_statement       =  { "effect:" ~ effect ~ ";" }
@@ -14,14 +14,18 @@ trigger_operator   =  { "trigger:" ~ operator_def ~ ";" }
 operator_def       =  { identifier ~ ("(" ~ operator_param* ~ ")")? }
 operator_param     = @{ identifier }
 
-condition  = { identifier ~ operator ~ value }
+
+condition  = { identifier ~ operator ~ (value | enum_value) }
 operator   = { ">" | "==" }
 effect     = { set_effect | inc_effect }
-set_effect = { "set" ~ identifier ~ "=" ~ (value | identifier) }
+set_effect = { "set" ~ identifier ~ "=" ~ (value | identifier | enum_value) }
 inc_effect = { "inc" ~ identifier ~ "by" ~ value }
 
 identifier = @{ (ASCII_ALPHANUMERIC | "_")+ }
+enum_value = @{ identifier ~ "::" ~ identifier }
 value      = @{ ("true" | "false") | "-"? ~ ASCII_DIGIT+ }
 STRING     = @{ "\"" ~ ((!"\"" ~ ANY))* ~ "\"" }
 
-htn = { SOI ~ WHITESPACE* ~ (primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }
+comment = _{ ("#" | "//") ~ (!"\n" ~ ANY)* ~ ("\n" | EOI) }
+
+htn = { SOI ~ WHITESPACE* ~ (comment | primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }

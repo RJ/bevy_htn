@@ -13,20 +13,32 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
     let field = inner.next().unwrap().as_str().to_string();
     let op = inner.next().unwrap().as_str();
     let val_str = inner.next().unwrap().as_str();
+
     match op {
         ">" => {
             let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
             HtnCondition::GreaterThanInt { field, threshold }
         }
         "==" => {
-            let bool_val = match val_str {
-                "true" => true,
-                "false" => false,
-                _ => panic!("Invalid boolean value"),
-            };
-            HtnCondition::EqualsBool {
-                field,
-                value: bool_val,
+            if val_str.contains("::") {
+                let parts: Vec<&str> = val_str.split("::").collect();
+                let enum_type = parts[0].to_string();
+                let enum_variant = parts[1].to_string();
+                HtnCondition::EqualsEnum {
+                    field,
+                    enum_type,
+                    enum_variant,
+                }
+            } else {
+                let bool_val = match val_str {
+                    "true" => true,
+                    "false" => false,
+                    _ => panic!("Invalid boolean value"),
+                };
+                HtnCondition::EqualsBool {
+                    field,
+                    value: bool_val,
+                }
             }
         }
         _ => panic!("Unsupported operator: {}", op),
@@ -34,7 +46,6 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
 }
 
 fn parse_effect(pair: Pair<Rule>) -> Effect {
-    // 'effect' rule can be set_effect or inc_effect
     let inner_pair = pair.into_inner().next().unwrap();
     match inner_pair.as_rule() {
         Rule::set_effect => {
@@ -53,8 +64,16 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
                     field,
                     value: int_val,
                 }
+            } else if val_str.contains("::") {
+                let parts: Vec<&str> = val_str.split("::").collect();
+                let enum_type = parts[0].to_string();
+                let enum_variant = parts[1].to_string();
+                Effect::SetEnum {
+                    field,
+                    enum_type,
+                    enum_variant,
+                }
             } else {
-                // Assume it's an identifier
                 let identifier = val_str.to_string();
                 Effect::SetIdentifier {
                     field,
@@ -166,7 +185,9 @@ fn parse_method<T: Reflect>(pair: Pair<Rule>) -> Method<T> {
     builder.build()
 }
 
-fn parse_compound_task<T: Reflect>(pair: Pair<Rule>) -> CompoundTask<T> {
+fn parse_compound_task<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
+    pair: Pair<Rule>,
+) -> CompoundTask<T> {
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
     let mut builder = CompoundTaskBuilder::<T>::new(name);
@@ -182,7 +203,9 @@ fn parse_compound_task<T: Reflect>(pair: Pair<Rule>) -> CompoundTask<T> {
 }
 
 // TODO error handling
-pub fn parse_htn<T: Reflect>(input: &str) -> HTN<T> {
+pub fn parse_htn<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
+    input: &str,
+) -> HTN<T> {
     let pairs = HtnParser::parse(Rule::htn, input).expect("Failed to parse DSL");
     let mut htn_builder = HTN::<T>::builder();
 

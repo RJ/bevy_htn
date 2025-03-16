@@ -6,10 +6,7 @@ use bevy_inspector_egui::{
 };
 use bevy_pancam::*;
 
-use crate::{
-    setup_level::{LoadingState, Rolodex},
-    GameState, HtnSupervisor,
-};
+use crate::{setup_level::LoadingState, GameState, HtnSupervisor};
 
 /// lerp factor when constraining viewport if sidebars resize/toggle
 const VIEWPORT_LERP: f32 = 0.07;
@@ -71,7 +68,7 @@ fn left_sidebar(
     // let mut gamestate = world.query::<&mut GameState>().single_mut(world);
     // let rolodex = world.get_resource::<Rolodex>().unwrap();
     // let troll = rolodex.troll;
-    let (entity, htn_sup, opt_plan) = world
+    let (entity, _htn_sup, opt_plan) = world
         .query_filtered::<(Entity, &HtnSupervisor<GameState>, Option<&Plan>), With<GameState>>()
         .single(world);
     let plan_id_str = opt_plan.map_or("".to_string(), |p| format!(" [{}]", p.id()));

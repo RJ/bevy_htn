@@ -15,14 +15,21 @@ An operator (which must derive HtnOperator) has to convert to a bevy_behave tree
 then the task exectutor runs the bt..
 
 
-## Hmm.
+## Hmm. Efects, Expected Effects, and ECS-modified GameState
 
 not sure if i need expected effects. 
 effects presumably are applied to GameState once an operator successfully completes.
 do we do it that way?
 still need ECS system to update GameState when external shit happens.
-maybe just ECS systems update GameState, and all effects in the htn are expected during planning.
+maybe just ECS systems update GameState, and all effects in the htn are expected during planning?
+
+could that lead to problems where the ECS systems don't update the gamestate in the way described by the effects?
 
 
-time to make a gui for the example?
+In the literature, HTN tasks have effects and expected_effects. Both are applied to the transient copy of the planner state used during the planning process, but only effects are permanently applied to the planner state once a task completes successfully.
 
+Meanwhile, external factors can change the planner state. Sensors for the character detect changes and update the planner state as needed, even when no plan is executing.
+
+So when we execute a task from the planner, the sensors should result in changes to the planner state 
+
+https://github.com/makspll/bevy_mod_scripting/blob/a4d1ffbcae98f42393ab447d73efe9b0b543426f/crates/bevy_mod_scripting_core/src/bindings/world.rs#L642
