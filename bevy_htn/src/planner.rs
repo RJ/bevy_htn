@@ -179,6 +179,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
         self.task_stack
             .push_back(self.htn.root_task().name().to_string());
         let mut state = initial_state.clone();
+        info!("PLAN initial state: {state:?}");
         // Using vecdeque as a stack, top of stack (next item) is the FRONT
         while let Some(current_task_name) = self.task_stack.pop_front() {
             sanity_count += 1;
@@ -202,7 +203,14 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                     if let Some((method, method_index)) =
                         compound.find_method(&state, self.method_index, self.atr)
                     {
-                        // info!("Compound task {current_task_name} has valid method {method_index}: {method:?}");
+                        info!(
+                            "{current_task_name} -> {} (method_index: {})",
+                            method
+                                .name
+                                .clone()
+                                .unwrap_or_else(|| format!("#{method_index}")),
+                            self.method_index,
+                        );
                         // record decomposition
                         let decomposition = DecompositionState {
                             current_task: current_task_name.clone(),
@@ -222,17 +230,20 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                 }
                 Task::Primitive(primitive) => {
                     if primitive.preconditions_met(&state, self.atr) {
-                        // info!("Adding primitive task to plan: {current_task_name}");
+                        info!("Adding primitive task to plan: {current_task_name}");
                         // add task to final plan
                         final_plan.push(current_task_name);
                         // apply this task's effects to the working world state
                         for effect in primitive.effects.iter() {
                             effect.apply(&mut state, self.atr);
                         }
+                        for effect in primitive.expected_effects.iter() {
+                            effect.apply(&mut state, self.atr);
+                        }
                         // info!("Working state is now: {state:?}");
                         continue;
                     } else {
-                        // info!("Primitive task preconditions not met: {current_task_name}");
+                        info!("Primitive task preconditions not met: {current_task_name}");
                         // fall through to restore decomp
                     }
                 }

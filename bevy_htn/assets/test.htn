@@ -1,94 +1,100 @@
 compound_task "BeTrunkThumper" {
-    method {
-        precondition: can_see_enemy == true;
-        subtask: AttackEnemy;
+    method "Enemy in sight, attack!" {
+        preconditions: [can_see_enemy == true]
+        subtasks: [AttackEnemy]
     }
-    method {
-        precondition: has_seen_enemy_recently == true;
-        subtask: NavigateToLastEnemyLoc;
-        subtask: RegainLOSRoar;
+    method "Try to find a recently seen enemy" {
+        preconditions: [has_seen_enemy_recently == true]
+        subtasks: [
+            NavigateToLastEnemyLoc,
+            RegainLOSRoar,
+        ]
     }
-    method {
-        subtask: ChooseBridgeToCheck;
-        subtask: NavigateToBridge;
-        subtask: CheckBridge;
+    method "Check bridge, no enemy available" {
+        subtasks: [
+            ChooseBridgeToCheck,
+            NavigateToBridge,
+            CheckBridge,
+        ]
     }
 }
 
 compound_task "AttackEnemy" {
-    method {
-        precondition: trunk_health > 0;
-        subtask: NavigateToEnemy;
-        subtask: DoTrunkSlam;
+    method "TrunkSlammin time" {
+        preconditions: [trunk_health > 0]
+        subtasks: [
+            NavigateToEnemy,
+            DoTrunkSlam
+        ]
     }
-    method {
-        subtask: FindTrunk;
-        subtask: NavigateToTrunk;
-        subtask: UprootTrunk;
-        subtask: AttackEnemy;
+    method "Trunk depleted.." {
+        subtasks: [
+            FindTrunk,
+            NavigateToTrunk,
+            UprootTrunk,
+            AttackEnemy,
+        ]
     }
 }
 
 primitive_task "DoTrunkSlam" {
-    precondition: within_melee_range == true;
-    precondition: trunk_health > 0;
-    operator:
-        spawn: DoTrunkSlamOperator;
-    effect: inc trunk_health by -1;
+    preconditions: [
+        within_melee_range == true,
+        trunk_health > 0,
+    ]
+    operator: DoTrunkSlamOperator
+    effects: [trunk_health -= 1]
 }
 
 primitive_task "UprootTrunk" {
-    precondition: within_trunk_pickup_range == true;
-    operator:
-        spawn: UprootTrunkOperator;
-    effect: set trunk_health = 3;
-    effect: set found_trunk = false;
-    effect: set within_trunk_pickup_range = false;
+    preconditions: [
+        within_trunk_pickup_range == true
+    ]
+    operator: UprootTrunkOperator
+    effects: [
+        trunk_health = 3,
+        found_trunk = false,
+        within_trunk_pickup_range = false,
+    ]
 }
 
 primitive_task "FindTrunk" {
-    operator:
-        spawn: FindTrunkOperator;
-    effect: set found_trunk = true;
+    operator: FindTrunkOperator
+    effects: [found_trunk = true]
 }
 
 primitive_task "NavigateToTrunk" {
-    operator:
-        spawn: NavigateToOperator(found_trunk_location);
-    effect: set within_trunk_pickup_range = true;
+    operator: NavigateToOperator(found_trunk_location)
+    effects: [within_trunk_pickup_range = true]
 }
 
 primitive_task "NavigateToEnemy" {
-    operator:
-        spawn: NavigateToOperator(last_enemy_location);
-    expected_effect: set within_melee_range = true;
+    operator: NavigateToOperator(last_enemy_location)
+    expected_effects: [within_melee_range = true]
 }
 
 primitive_task "NavigateToLastEnemyLoc" {
-    operator:
-        spawn: NavigateToOperator(last_enemy_location);
-    effect: set location = last_enemy_location;
-    expected_effect: set can_see_enemy = true;
-    expected_effect: set within_melee_range = true;
+    operator: NavigateToOperator(last_enemy_location)
+    effects: [location = last_enemy_location]
+    expected_effects: [
+        can_see_enemy = true,
+        within_melee_range = true,
+    ]
 }
 
 primitive_task "RegainLOSRoar" {
-    precondition: can_see_enemy == true;
-    operator:
-        spawn: RegainLOSOperator; 
+    preconditions: [can_see_enemy == true]
+    operator: RegainLOSOperator
 }
 
 primitive_task "ChooseBridgeToCheck" {
-    operator:
-        spawn: ChooseBridgeToCheckOperator;
+    operator: ChooseBridgeToCheckOperator
 }
 
 primitive_task "NavigateToBridge" {
-    operator:
-        spawn: NavigateToOperator(bridge_to_check);
+    operator: NavigateToOperator(bridge_to_check)
 }
 
 primitive_task "CheckBridge" {
-    operator:
-        spawn: CheckBridgeOperator;
+    operator: CheckBridgeOperator
 }

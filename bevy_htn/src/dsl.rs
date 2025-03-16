@@ -2,6 +2,7 @@ use crate::htn::*;
 use bevy::prelude::*;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
+use std::marker::PhantomData;
 
 #[derive(Parser)]
 #[grammar = "src/htn.pest"]
@@ -153,26 +154,38 @@ fn parse_primitive_task<T: Reflect>(pair: Pair<Rule>) -> PrimitiveTask<T> {
                     params,
                 });
             }
-            Rule::effect_statement => {
-                let effect = stmt
+            Rule::effects_statement => {
+                let effects = stmt
                     .into_inner()
-                    .find(|p| p.as_rule() == Rule::effect)
-                    .unwrap();
-                builder = builder.effect(parse_effect(effect));
+                    .filter(|p| p.as_rule() == Rule::effect)
+                    .map(|p| parse_effect(p))
+                    .collect::<Vec<_>>();
+
+                for effect in effects {
+                    builder = builder.effect(effect);
+                }
             }
-            Rule::expected_effect_statement => {
-                let effect = stmt
+            Rule::expected_effects_statement => {
+                let effects = stmt
                     .into_inner()
-                    .find(|p| p.as_rule() == Rule::effect)
-                    .unwrap();
-                builder = builder.expected_effect(parse_effect(effect));
+                    .filter(|p| p.as_rule() == Rule::effect)
+                    .map(|p| parse_effect(p))
+                    .collect::<Vec<_>>();
+
+                for effect in effects {
+                    builder = builder.expected_effect(effect);
+                }
             }
-            Rule::precondition_statement => {
-                let condition = stmt
+            Rule::preconditions_statement => {
+                let conditions = stmt
                     .into_inner()
-                    .find(|p| p.as_rule() == Rule::condition)
-                    .unwrap();
-                builder = builder.precondition(parse_condition(condition));
+                    .filter(|p| p.as_rule() == Rule::condition)
+                    .map(|p| parse_condition(p))
+                    .collect::<Vec<_>>();
+
+                for condition in conditions {
+                    builder = builder.precondition(condition);
+                }
             }
             _ => {}
         }
@@ -183,25 +196,43 @@ fn parse_primitive_task<T: Reflect>(pair: Pair<Rule>) -> PrimitiveTask<T> {
 
 fn parse_method<T: Reflect>(pair: Pair<Rule>) -> Method<T> {
     let mut builder = MethodBuilder::<T>::new();
+    let mut inner = pair.into_inner().peekable();
 
-    for stmt in pair.into_inner() {
+    // Optional method name
+    if let Some(pair) = inner.peek() {
+        if pair.as_rule() == Rule::STRING {
+            let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
+            builder = builder.name(name);
+        }
+    }
+
+    for stmt in inner {
         match stmt.as_rule() {
-            Rule::precondition_statement => {
-                let condition = stmt
+            Rule::preconditions_statement => {
+                let conditions = stmt
                     .into_inner()
-                    .find(|p| p.as_rule() == Rule::condition)
-                    .unwrap();
-                builder = builder.precondition(parse_condition(condition));
+                    .filter(|p| p.as_rule() == Rule::condition)
+                    .map(|p| parse_condition(p))
+                    .collect::<Vec<_>>();
+
+                for condition in conditions {
+                    builder = builder.precondition(condition);
+                }
             }
-            Rule::subtask_statement => {
-                let mut inner = stmt.into_inner();
-                let task_name = inner.next().unwrap().as_str().to_string();
-                builder = builder.subtask(task_name);
+            Rule::subtasks_statement => {
+                let subtasks = stmt
+                    .into_inner()
+                    .filter(|p| p.as_rule() == Rule::identifier)
+                    .map(|p| p.as_str().to_string())
+                    .collect::<Vec<_>>();
+
+                for subtask in subtasks {
+                    builder = builder.subtask(subtask);
+                }
             }
             _ => {}
         }
     }
-
     builder.build()
 }
 

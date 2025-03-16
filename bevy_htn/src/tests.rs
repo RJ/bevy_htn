@@ -107,18 +107,24 @@ fn test_parser() {
     let src = r#"
     primitive_task "TestTask1" {
         operator: TestOperator1
-        precondition: tog == false
-        effect: tog = true
-        effect: counter -= 1
-        expected_effect: location = Location::Work
+        preconditions: [tog == false, location == Location::Home]
+        effects: [
+            tog = true,
+            counter -= 1,
+        ]
+        expected_effects: [location = Location::Work]
     }
     compound_task "CompoundTask1" {
         method {
-            precondition: tog == true
-            subtask: TestTask1
+            preconditions: [tog == true]
+            subtasks: [TestTask1]
         }
         method {
-            subtask: FooTask
+            preconditions: []
+            subtasks: [FooTask,]
+        }
+        method {
+            subtasks: [FooTask, BarTask]
         }
     }
     "#;
@@ -128,15 +134,27 @@ fn test_parser() {
         panic!("Task is not a primitive");
     };
     assert_eq!(task1.name, "TestTask1");
-    assert_eq!(task1.preconditions.len(), 1);
-    assert_eq!(task1.effects.len(), 2);
-    assert_eq!(task1.expected_effects.len(), 1);
     assert_eq!(
-        task1.preconditions[0],
-        HtnCondition::EqualsBool {
-            field: "tog".to_string(),
-            value: false,
-        }
+        task1.expected_effects,
+        vec![Effect::SetEnum {
+            field: "location".to_string(),
+            enum_type: "Location".into(),
+            enum_variant: "Work".into(),
+        }]
+    );
+    assert_eq!(
+        task1.preconditions,
+        vec![
+            HtnCondition::EqualsBool {
+                field: "tog".to_string(),
+                value: false,
+            },
+            HtnCondition::EqualsEnum {
+                field: "location".to_string(),
+                enum_type: "Location".into(),
+                enum_variant: "Home".into(),
+            },
+        ]
     );
     assert_eq!(
         task1.effects,
@@ -163,7 +181,7 @@ fn test_parser() {
         panic!("Task is not a compound");
     };
     assert_eq!(task2.name, "CompoundTask1");
-    assert_eq!(task2.methods.len(), 2);
+    assert_eq!(task2.methods.len(), 3);
     assert_eq!(
         task2.methods[0].preconditions,
         vec![HtnCondition::EqualsBool {
@@ -172,6 +190,11 @@ fn test_parser() {
         }]
     );
     assert_eq!(task2.methods[1].preconditions, vec![]);
+    assert_eq!(task2.methods[1].subtasks, vec!["FooTask".to_string()]);
+    assert_eq!(
+        task2.methods[2].subtasks,
+        vec!["FooTask".to_string(), "BarTask".to_string()]
+    );
 
     assert_eq!(task2.methods[0].subtasks, vec!["TestTask1".to_string()]);
     assert_eq!(task2.methods[1].subtasks, vec!["FooTask".to_string()]);

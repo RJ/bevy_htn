@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 #[derive(Clone, Debug, Reflect)]
 pub struct Method<T: Reflect> {
+    pub name: Option<String>,
     pub preconditions: Vec<HtnCondition>,
     pub subtasks: Vec<String>, // Just the task names now
     _phantom: PhantomData<T>,
@@ -71,6 +72,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> CompoundTaskBui
 pub struct MethodBuilder<T: Reflect> {
     preconditions: Vec<HtnCondition>,
     subtasks: Vec<String>, // Just task names, not the actual tasks
+    name: Option<String>,
     _phantom: PhantomData<T>,
 }
 
@@ -80,8 +82,14 @@ impl<T: Reflect> MethodBuilder<T> {
         MethodBuilder {
             preconditions: Vec::new(),
             subtasks: Vec::new(),
+            name: None,
             _phantom: PhantomData,
         }
+    }
+
+    pub fn name(mut self, name: String) -> Self {
+        self.name = Some(name);
+        self
     }
 
     pub fn precondition(mut self, cond: HtnCondition) -> Self {
@@ -98,6 +106,7 @@ impl<T: Reflect> MethodBuilder<T> {
         Method {
             preconditions: self.preconditions,
             subtasks: self.subtasks,
+            name: self.name,
             _phantom: PhantomData,
         }
     }
