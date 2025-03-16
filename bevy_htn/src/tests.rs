@@ -106,19 +106,19 @@ fn test_cond_enum() {
 fn test_parser() {
     let src = r#"
     primitive_task "TestTask1" {
-        operator: TestOperator1;
-        precondition: tog == false;
-        effect: tog = true;
-        effect: counter -= 1;
-        expected_effect: location = Location::Work;
+        operator: TestOperator1
+        precondition: tog == false
+        effect: tog = true
+        effect: counter -= 1
+        expected_effect: location = Location::Work
     }
     compound_task "CompoundTask1" {
         method {
-            precondition: tog == true;
-            subtask: TestTask1;
+            precondition: tog == true
+            subtask: TestTask1
         }
         method {
-            subtask: FooTask;
+            subtask: FooTask
         }
     }
     "#;

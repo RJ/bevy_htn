@@ -1,14 +1,17 @@
-WHITESPACE = _{ " " | "\t" | "\n" }
+EOL = _{(" " | "\t" | "\r")* ~ ("\n" | EOI)}
+WHITESPACE = _{ " " | "\t" }
 
-primitive_task         =  { "primitive_task" ~ STRING ~ "{" ~ (comment | operator_statement | effect_statement | expected_effect_statement | precondition_statement)* ~ "}" }
-compound_task          =  { "compound_task" ~ STRING ~ "{" ~ (comment |  method)* ~ "}" }
-method                 =  { "method" ~ "{" ~ (comment | precondition_statement | subtask_statement)* ~ "}" }
-subtask_statement      =  { "subtask:" ~ identifier ~ ";" }
-precondition_statement =  { "precondition:" ~ condition ~ ";" }
-effect_statement       =  { "effect:" ~ effect ~ ";" }
-expected_effect_statement = { "expected_effect:" ~ effect ~ ";" }
+primitive_task         =  { EOL? ~ "primitive_task" ~ STRING ~ "{" ~ EOL? ~ 
+                            (comment | operator_statement | effect_statement | expected_effect_statement | precondition_statement)* 
+                        ~ "}" ~ EOL }
+compound_task          =  { EOL? ~ "compound_task" ~ STRING ~ "{" ~ EOL? ~ (comment |  method)* ~ "}" ~ EOL }
+method                 =  { "method" ~ "{" ~ EOL? ~ (comment | precondition_statement | subtask_statement)* ~ "}" ~ EOL }
+subtask_statement      =  { "subtask:" ~ identifier ~ EOL }
+precondition_statement =  { "precondition:" ~ condition ~ EOL }
+effect_statement       =  { "effect:" ~ effect ~ EOL }
+expected_effect_statement = { "expected_effect:" ~ effect ~ EOL }
 
-operator_statement =  { "operator:" ~ operator_def ~ ";"  }
+operator_statement =  { "operator:" ~ operator_def ~ EOL  }
 operator_def       =  { identifier ~ ("(" ~ operator_param* ~ ")")? }
 operator_param     = @{ identifier }
 
