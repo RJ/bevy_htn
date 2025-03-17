@@ -31,6 +31,7 @@ fn on_uproot_trunk(
             return;
         }
     }
+    // TODO set found_trunk to false
     error!("No trunk found to uproot");
     commands.trigger(ctx.failure());
 }

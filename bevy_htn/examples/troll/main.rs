@@ -64,10 +64,17 @@ fn main() {
 
     app.add_systems(OnEnter(LoadingState::Ready), setup_troll_htn_supervisor);
     app.add_systems(OnEnter(LoadingState::SpawningEntities), print_htn);
-    app.add_systems(Update, replan_checker.run_if(in_state(LoadingState::Ready)));
+    app.add_systems(OnEnter(LoadingState::Ready), trigger_first_plan);
     app.add_systems(Update, troll_enemy_vision_sensor);
 
     app.run();
+}
+
+// ask eveery supervisor to replan.
+fn trigger_first_plan(q: Query<Entity, With<HtnSupervisor<GameState>>>, mut commands: Commands) {
+    info!("Triggering first plan 🥇");
+    q.iter()
+        .for_each(|e| commands.trigger_targets(ReplanRequest, e));
 }
 
 fn initial_gamestate() -> GameState {
@@ -78,8 +85,8 @@ fn initial_gamestate() -> GameState {
         found_trunk: false,
         found_trunk_location: Vec2::new(2., 2.),
         can_navigate_to_enemy: true,
-        attacked_recently: true,
-        can_see_enemy: true,
+        attacked_recently: false,
+        can_see_enemy: false,
         has_seen_enemy_recently: false,
         last_enemy_location: Vec2::new(666., 666.),
         next_bridge_to_check: 1,
@@ -150,14 +157,8 @@ fn troll_enemy_vision_sensor(
 }
 
 /// When this runs, all entities are spawned and the HTN asset is loaded.
-fn setup_troll_htn_supervisor(
-    mut commands: Commands,
-    // mut assets: ResMut<Assets<HtnAsset<GameState>>>,
-    rolodex: Res<Rolodex>,
-) {
-    // let troll_htn_asset = assets.get(&rolodex.troll_htn).unwrap();
-    info!("rolodex: {:#?}", rolodex);
-    let troll_htn_supervisor = commands
+fn setup_troll_htn_supervisor(mut commands: Commands, rolodex: Res<Rolodex>) {
+    commands
         .spawn((
             Name::new("Htn Supervisor"),
             HtnSupervisor {
@@ -165,10 +166,8 @@ fn setup_troll_htn_supervisor(
             },
             initial_gamestate(),
         ))
-        .id();
-    commands
-        .entity(rolodex.troll)
-        .add_child(troll_htn_supervisor);
+        .set_parent(rolodex.troll)
+        .trigger(ReplanRequest);
 }
 
 // need a child of the troll to act as the HtnOperator parent, that holds the plan and has children that
@@ -183,60 +182,4 @@ fn print_htn(assets: Res<Assets<HtnAsset<GameState>>>, rolodex: Res<Rolodex>) {
         return;
     };
     info!("HTN: {:#?}", htn_asset.htn);
-}
-
-#[allow(clippy::type_complexity)]
-fn replan_checker(
-    assets: Res<Assets<HtnAsset<GameState>>>,
-    _rolodex: Res<Rolodex>,
-    q: Query<
-        (
-            Entity,
-            &HtnSupervisor<GameState>,
-            &Parent,
-            &GameState,
-            Option<&Plan>,
-        ),
-        Or<(Added<GameState>, Changed<GameState>)>,
-    >,
-    mut commands: Commands,
-    atr: Res<AppTypeRegistry>,
-) {
-    let Ok((sup_entity, htn_supervisor, _parent, state, opt_plan)) = q.get_single() else {
-        return;
-    };
-    let Some(htn_asset) = assets.get(&htn_supervisor.htn_handle) else {
-        return;
-    };
-    info!("🔄 GameState changed, replan check");
-    let htn = &htn_asset.htn;
-
-    // let type_registry = type_registry.read();
-
-    // info!("Planning - Initial State:\n{:#?}", state);
-    let mut planner = HtnPlanner::new(htn, atr.as_ref());
-    let plan = planner.plan(state);
-
-    if let Some(existing_plan) = opt_plan {
-        if *existing_plan == plan {
-            info!("🔂 Plan is the same as existing, skipping");
-            return;
-        }
-    }
-
-    info!("🗺️ Inserting Plan: {plan}");
-    commands.entity(sup_entity).insert(plan);
-
-    // htn_supervisor.plan = Some(Plan {
-    //     tasks: plan.clone(),
-    //     current_task: 0,
-    // });
-
-    // let Task::Primitive(task) = htn.get_task_by_name(&plan[0]).unwrap() else {
-    //     panic!("Task is not a primitive");
-    // };
-    // let cmd = task
-    //     .execution_command(state, &type_registry, Some(rolodex.troll))
-    //     .unwrap();
-    // commands.queue(cmd);
 }

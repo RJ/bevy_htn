@@ -39,10 +39,18 @@ https://github.com/makspll/bevy_mod_scripting/blob/a4d1ffbcae98f42393ab447d73efe
 HtpOperator to_tree doesn't need to return an Option if we always use it.
 do we still need the htn trigger alternative? that can provide the planned task id, which is
 maybe useful... but can you just get that by querying the Plan component via ctx.supervisor_entity()?
+maybe we can just insert a context component so behaviours can look it up if needed?
+
+while a plan is running, if gamestate changes, verify all preconditions of current and remaining tasks in the plan still pass,
+and if not, fail the plan.
 
 ## HTN bugs
 
 troll does 3 attacks, trunk health goes to 0
 starts to move towards trunk to uproot it
 enemy goes out of range, replans, no enemy in range so replans to nav to last enemy pos, roar.
-this causes enemy to become in range, goes back to uproot plan.
+this causes enemy to become in range (via sensor updating gamestate), goes back to uproot plan.
+bounces between two plans never getting anywhere, moving just in and out of enemy range.
+
+need to implement MTR.
+

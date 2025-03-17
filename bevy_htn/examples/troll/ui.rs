@@ -71,7 +71,9 @@ fn left_sidebar(
     let (entity, _htn_sup, opt_plan) = world
         .query_filtered::<(Entity, &HtnSupervisor<GameState>, Option<&Plan>), With<GameState>>()
         .single(world);
-    let plan_id_str = opt_plan.map_or("".to_string(), |p| format!(" [{}]", p.id()));
+    let plan_id_str = opt_plan.map_or("".to_string(), |p| {
+        format!(" [{}] = {:?}", p.id(), p.status())
+    });
     let tasks = opt_plan
         .map(|plan| {
             plan.tasks
