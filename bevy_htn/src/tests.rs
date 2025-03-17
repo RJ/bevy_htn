@@ -105,6 +105,13 @@ fn test_cond_enum() {
 #[test]
 fn test_parser() {
     let src = r#"
+    // the htn block defines what version of the crate your DSL is written for.
+    // i  won't bother with backwards compatability unless there are lots of users on old versions,
+    // but having a version string is necessary if I ever need to do that.
+    htn {
+        version: 0.1.0
+    }
+
     // comment
     primitive_task "TestTask1" {
         // comment
@@ -142,6 +149,7 @@ fn test_parser() {
     }
     "#;
     let htn = parse_htn::<TestState>(src);
+    assert_eq!(htn.version, "0.1.0");
     assert_eq!(htn.tasks.len(), 2);
     let Task::Primitive(task1) = &htn.tasks[0] else {
         panic!("Task is not a primitive");

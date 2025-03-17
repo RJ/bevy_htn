@@ -5,11 +5,15 @@ use bevy::prelude::*;
 #[derive(Debug, Reflect, Clone)]
 pub struct HTN<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
     pub tasks: Vec<Task<T>>,
+    pub version: String,
 }
 
 impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
     pub fn builder() -> HTNBuilder<T> {
-        HTNBuilder { tasks: Vec::new() }
+        HTNBuilder {
+            tasks: Vec::new(),
+            version: "".to_string(),
+        }
     }
 
     /// Returns the task with the given name.
@@ -40,6 +44,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
 
 pub struct HTNBuilder<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
     tasks: Vec<Task<T>>,
+    version: String,
 }
 
 impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
@@ -50,6 +55,11 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
 
     pub fn compound_task(mut self, task: CompoundTask<T>) -> Self {
         self.tasks.push(Task::Compound(task));
+        self
+    }
+
+    pub fn version(mut self, version: String) -> Self {
+        self.version = version;
         self
     }
 
@@ -66,7 +76,10 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
     }
 
     pub fn build(self) -> HTN<T> {
-        HTN { tasks: self.tasks }
+        HTN {
+            tasks: self.tasks,
+            version: self.version,
+        }
     }
 }
 
