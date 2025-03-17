@@ -2,7 +2,7 @@ use super::*;
 use bevy::prelude::*;
 
 #[derive(Debug, Reflect, Clone, Default)]
-pub struct HTNMeta {
+pub struct HtnSchema {
     pub version: String,
 }
 
@@ -10,20 +10,20 @@ pub struct HTNMeta {
 #[derive(Debug, Reflect, Clone)]
 pub struct HTN<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
     pub tasks: Vec<Task<T>>,
-    pub meta: HTNMeta,
+    pub schema: HtnSchema,
 }
 
 impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
     pub fn builder() -> HTNBuilder<T> {
         HTNBuilder {
             tasks: Vec::new(),
-            meta: HTNMeta::default(),
+            schema: HtnSchema::default(),
         }
     }
 
     /// Gets version declared in the htn block.
     pub fn version(&self) -> &str {
-        &self.meta.version
+        &self.schema.version
     }
 
     /// Returns the task with the given name.
@@ -54,7 +54,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
 
 pub struct HTNBuilder<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
     tasks: Vec<Task<T>>,
-    meta: HTNMeta,
+    schema: HtnSchema,
 }
 
 impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
@@ -68,8 +68,8 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
         self
     }
 
-    pub fn meta(mut self, meta: HTNMeta) -> Self {
-        self.meta = meta;
+    pub fn schema(mut self, meta: HtnSchema) -> Self {
+        self.schema = meta;
         self
     }
 
@@ -88,7 +88,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
     pub fn build(self) -> HTN<T> {
         HTN {
             tasks: self.tasks,
-            meta: self.meta,
+            schema: self.schema,
         }
     }
 }

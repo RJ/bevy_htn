@@ -45,6 +45,8 @@ impl Effect {
                     if let Some(b) = val.try_downcast_mut::<bool>() {
                         *b = *value;
                     }
+                } else {
+                    panic!("Field {field} does not exist in the state");
                 }
             }
             Effect::SetInt { field, value } => {
@@ -52,6 +54,8 @@ impl Effect {
                     if let Some(i) = val.try_downcast_mut::<i32>() {
                         *i = *value;
                     }
+                } else {
+                    panic!("Field {field} does not exist in the state");
                 }
             }
             Effect::IncrementInt { field, by } => {
@@ -59,10 +63,15 @@ impl Effect {
                     if let Some(i) = val.try_downcast_mut::<i32>() {
                         *i += *by;
                     }
+                } else {
+                    panic!("Field {field} does not exist in the state");
                 }
             }
             Effect::SetIdentifier { field, value } => {
-                let newval = reflected.field(value).unwrap().clone_value();
+                let Some(newval) = reflected.field(value) else {
+                    panic!("Field {value} does not exist in the state");
+                };
+                let newval = newval.clone_value();
                 let val = reflected.field_mut(field).unwrap();
                 val.apply(newval.as_ref());
             }
@@ -89,6 +98,8 @@ impl Effect {
                         .expect("Enum type not found");
                     new_dyn_enum.set_represented_type(Some(type_reg.type_info()));
                     state_dyn_enum.apply(new_dyn_enum.as_partial_reflect());
+                } else {
+                    panic!("Field {field} does not exist in the state");
                 }
             }
         }

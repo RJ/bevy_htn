@@ -5,7 +5,7 @@ pub fn trunk_slam_plugin(app: &mut App) {
     app.add_systems(Update, trunk_slam_system);
 }
 
-const ANIM_SECS: f32 = 2.0;
+const ANIM_SECS: f32 = 1.0;
 
 fn trunk_slam_system(
     mut q_behave: Query<(&BehaveCtx, &mut DoTrunkSlamOperator)>,

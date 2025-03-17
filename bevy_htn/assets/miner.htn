@@ -1,0 +1,138 @@
+// Based on bevy_dogoap's miner example.
+// However with HTNs, as opposed to GOAP, you generally encode the desired goal state into the
+// HTN, rather than search for a plan backwards from a desired end state.
+
+schema {
+    version: 0.1.0
+}
+
+compound_task "EarnGold" {
+    method "Got enough gold" {
+        preconditions: [gold >= 3]
+        subtasks: []
+    }
+    method "Convert metal to gold" {
+        preconditions: [has_metal == true]
+        subtasks: [
+            TurnMetalIntoGold,
+            EarnGold,
+        ]
+    }
+    method "Convert ore to gold" {
+        preconditions: [has_metal == false, has_ore == true]
+        subtasks: [
+            TurnOreIntoMetal,
+            EarnGold,
+        ]
+    }
+    method "Get some ore" {
+        preconditions: [has_ore == false]
+        subtasks: [
+            GoToOre,
+            MineOre,
+            EarnGold,
+        ]
+    }
+}
+
+// prim tasks are rust struct names in camel case,
+// compound tasks are quoted strings?
+compound_task "TurnOreIntoMetal" {
+    method "Get to the smelter to flog ore" {
+        preconditions: [has_ore == true, location != Location::Smelter]
+        subtasks: [
+            GoToSmelter,
+            TurnOreIntoMetal
+        ]
+    }
+    method "Smelter-time" {
+        preconditions: [has_ore == true, location == Location::Smelter]
+        subtasks: [
+            SmeltOre,
+            GoToOutside,
+        ]
+    }
+
+}
+
+compound_task "TurnMetalIntoGold" {
+    method "Prepare to sell metal" {
+        preconditions: [has_metal == true, location != Location::Merchant]
+        subtasks: [
+            GoToMerchant,
+            TurnMetalIntoGold,
+        ]
+    }
+    method "Sell metal at merchant" {
+        preconditions: [has_metal == true, location == Location::Merchant]
+        subtasks: [
+            SellMetal,
+            GoToOutside,
+        ]
+    }
+}
+
+primitive_task "Eat" {
+    preconditions: [hunger > 50, location == Location::Mushroom]
+    effects: [hunger -= 25, location = Location::Outside]
+    operator: EatOperator
+}
+
+primitive_task "Sleep" {
+    preconditions: [energy < 50, location == Location::House]
+    effects: [energy += 100]
+    operator: SleepOperator
+}
+
+primitive_task "MineOre" {
+    preconditions: [energy > 10, hunger < 75, location == Location::Ore]
+    effects: [has_ore = true, location = Location::Outside]
+    operator: MineOreOperator
+}
+
+primitive_task "SmeltOre" {
+    preconditions: [energy > 10, hunger < 75, location == Location::Smelter, has_ore == true]
+    effects: [has_ore = false, has_metal = true]
+    operator: SmeltOreOperator
+}
+
+primitive_task "SellMetal" {
+    preconditions: [energy > 10, hunger < 75, location == Location::Merchant, has_metal == true]
+    effects: [gold += 1, has_metal = false]
+    operator: SellMetalOperator
+}
+
+primitive_task "GoToOutside" {
+    effects: [location = Location::Outside]
+    operator: GoToOutsideOperator
+}
+
+primitive_task "GoToHouse" {
+    preconditions: [location == Location::Outside]
+    effects: [location = Location::House]
+    operator: GoToHouseOperator
+}
+
+primitive_task "GoToMushroom" {
+    preconditions: [location == Location::Outside]
+    effects: [location = Location::Mushroom]
+    operator: GoToMushroomOperator
+}
+
+primitive_task "GoToOre" {
+    // preconditions: [location == Location::Outside]
+    effects: [location = Location::Ore]
+    operator: GoToOreOperator
+}
+
+primitive_task "GoToSmelter" {
+    // preconditions: [location == Location::Outside]
+    effects: [location = Location::Smelter]
+    operator: GoToSmelterOperator
+}
+
+primitive_task "GoToMerchant" {
+    // preconditions: [location == Location::Outside]
+    effects: [location = Location::Merchant]
+    operator: GoToMerchantOperator
+}

@@ -1,3 +1,7 @@
+schema {
+    version: 0.1.0
+}
+
 compound_task "BeTrunkThumper" {
     method "Enemy in sight, attack!" {
         preconditions: [can_see_enemy == true]
@@ -8,6 +12,7 @@ compound_task "BeTrunkThumper" {
         subtasks: [
             NavigateToLastEnemyLoc,
             RegainLOSRoar,
+            CatchBreath,
         ]
     }
     method "Check bridge, no enemy available" {
@@ -39,6 +44,9 @@ compound_task "AttackEnemy" {
             AttackEnemy,
         ]
     }
+}
+primitive_task "CatchBreath" {
+    operator: WaitOperator
 }
 
 primitive_task "DoTrunkSlam" {

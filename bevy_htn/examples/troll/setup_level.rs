@@ -91,7 +91,8 @@ pub fn setup_level(app: &mut App) {
     );
 }
 
-const PLAYER_SPEED: f32 = 200.0;
+const PLAYER_SPEED: f32 = 250.0;
+pub const TROLL_SPEED: f32 = 100.0;
 
 // move the player using arrow keys
 fn player_movement(

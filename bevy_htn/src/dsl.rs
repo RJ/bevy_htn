@@ -47,7 +47,8 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                 orequals: false,
             }
         }
-        "==" => {
+        "==" | "!=" => {
+            let notted = op == "!=";
             if val_str.contains("::") {
                 let parts: Vec<&str> = val_str.split("::").collect();
                 let enum_type = parts[0].to_string();
@@ -56,11 +57,13 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                     field,
                     enum_type,
                     enum_variant,
+                    notted,
                 }
             } else if let Ok(int_val) = val_str.parse::<i32>() {
                 HtnCondition::EqualsInt {
                     field,
                     value: int_val,
+                    notted,
                 }
             } else if val_str == "true" || val_str == "false" {
                 let bool_val = match val_str {
@@ -71,6 +74,7 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                 HtnCondition::EqualsBool {
                     field,
                     value: bool_val,
+                    notted,
                 }
             } else {
                 panic!("Unsupported operator: {}", op);
@@ -148,6 +152,7 @@ fn parse_primitive_task<T: Reflect>(pair: Pair<Rule>) -> PrimitiveTask<T> {
                 let op_name = op_parts.next().unwrap().as_str().to_string();
                 let params: Vec<String> =
                     op_parts.map(|param| param.as_str().to_string()).collect();
+                bevy::log::warn!("params = {params:?}");
                 builder = builder.operator(Operator::Trigger {
                     name: op_name,
                     params,
@@ -252,21 +257,21 @@ fn parse_compound_task<T: Reflect + Default + TypePath + Clone + core::fmt::Debu
     builder.build()
 }
 
-fn parse_htn_meta(pair: Pair<Rule>) -> HTNMeta {
+fn parse_schema(pair: Pair<Rule>) -> HtnSchema {
     let mut inner_rules = pair.into_inner();
-    let htn_version_statement = inner_rules.next().unwrap();
-    if htn_version_statement.as_rule() == Rule::htn_version_statement {
-        let version_pair = htn_version_statement.into_inner().next().unwrap();
+    let schema_version_statement = inner_rules.next().unwrap();
+    if schema_version_statement.as_rule() == Rule::schema_version_statement {
+        let version_pair = schema_version_statement.into_inner().next().unwrap();
         if version_pair.as_rule() == Rule::SEMVER {
             let version = version_pair.as_str().to_string();
-            HTNMeta { version }
+            HtnSchema { version }
         } else {
             panic!("Invalid version: {}", version_pair.as_str());
         }
     } else {
         panic!(
-            "Expected htn_version_statement, found: {}",
-            htn_version_statement.as_str()
+            "Expected schema_version_statement, found: {}",
+            schema_version_statement.as_str()
         );
     }
 }
@@ -281,9 +286,9 @@ pub fn parse_htn<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
     let htn_pair = pairs.into_iter().next().unwrap();
     for pair in htn_pair.into_inner() {
         match pair.as_rule() {
-            Rule::htn_meta => {
-                let meta = parse_htn_meta(pair);
-                htn_builder = htn_builder.meta(meta);
+            Rule::schema => {
+                let meta = parse_schema(pair);
+                htn_builder = htn_builder.schema(meta);
             }
             Rule::primitive_task => {
                 let task = parse_primitive_task::<T>(pair);

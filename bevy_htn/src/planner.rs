@@ -254,6 +254,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             //     "Processing: {current_task_name} Stack: {:?}",
             //     self.task_stack
             // );
+            info!("planner state: {state:?}");
             match task {
                 Task::Compound(compound) => {
                     // find the first method with passing preconditions
@@ -261,7 +262,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                         compound.find_method(&state, self.method_index, self.atr)
                     {
                         info!(
-                            "{current_task_name} -> {} (using index: {method_index}, skipped {})",
+                            "🟨 {current_task_name} -> {} (using index: {method_index}, skipped {})",
                             method
                                 .name
                                 .clone()
@@ -283,13 +284,17 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                         }
                         continue;
                     } else {
-                        // info!("Compound task {current_task_name} has no valid method");
+                        info!("🟥 Compound task {current_task_name} has no valid method");
+                        info!("Current state: {state:?}");
                         // fall through to restore decomp
                     }
                 }
                 Task::Primitive(primitive) => {
                     if primitive.preconditions_met(&state, self.atr) {
-                        info!("Adding primitive task to plan: {current_task_name}");
+                        info!(
+                            "🟢 Adding primitive task to plan: {current_task_name} -> [{}]",
+                            final_plan.join(", ")
+                        );
                         // add task to final plan
                         final_plan.push(current_task_name);
                         // apply this task's effects to the planner state
@@ -302,17 +307,21 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                         // info!("Working state is now: {state:?}");
                         continue;
                     } else {
-                        info!("Primitive task preconditions not met: {current_task_name}");
+                        info!("🔴 Primitive task preconditions not met: {current_task_name}");
+                        info!("Current state: {state:?}");
                         // fall through to restore decomp
                     }
                 }
             }
-            let decomp = self.decomp_stack.pop().unwrap();
-            warn!("Restoring decomp {decomp:?}");
-            final_plan = decomp.final_plan;
-            self.method_index = decomp.next_method_index;
-            self.task_stack.push_front(decomp.current_task);
-            self.mtr = decomp.mtr;
+            if let Some(decomp) = self.decomp_stack.pop() {
+                warn!("Restoring decomp {decomp:?}");
+                final_plan = decomp.final_plan;
+                self.method_index = decomp.next_method_index;
+                self.task_stack.push_front(decomp.current_task);
+                self.mtr = decomp.mtr;
+            } else {
+                warn!("No decomp, plan failed?");
+            }
         }
         // info!("Planning final state: {state:#?}");
         Plan::new(final_plan, self.mtr.clone())

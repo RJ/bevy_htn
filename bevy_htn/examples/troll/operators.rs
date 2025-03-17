@@ -20,17 +20,23 @@ pub struct DoTrunkSlamOperator {
     pub start: f32,
 }
 
+#[derive(Debug, Reflect, Clone, Component)]
+#[reflect(Default, HtnOperator)]
+pub struct WaitOperator(pub f32);
+impl Default for WaitOperator {
+    fn default() -> Self {
+        Self(3.0)
+    }
+}
+
 // if you remove the HtnOperator Derive (and spawn_named) you can manually provide a tree:
-// impl HtnOperator for DoTrunkSlamOperator {
-//     fn to_tree(&self) -> Option<Tree<Behave>> {
-//         Some(behave! {
-//             Behave::Sequence => {
-//                 Behave::spawn_named("Trunk Slam", TrunkSlamOperator::default()),
-//                 Behave::Wait(3.0),
-//             }
-//         })
-//     }
-// }
+impl HtnOperator for WaitOperator {
+    fn to_tree(&self) -> Option<Tree<Behave>> {
+        Some(behave! {
+            Behave::Wait(self.0)
+        })
+    }
+}
 
 #[derive(Debug, Reflect, Default, Clone, HtnOperator)]
 #[reflect(Default, HtnOperator)]

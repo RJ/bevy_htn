@@ -8,6 +8,7 @@ mod navigate_to;
 mod regain_los;
 mod trunk_slam;
 mod uproot_trunk;
+mod wait;
 
 // if we implemented to_tree manually for an operator we'd probably need to expose the executor
 // structs here to build the tree:
@@ -25,5 +26,6 @@ impl PluginGroup for OperatorPlugins {
             .add(find_trunk::find_trunk_plugin)
             .add(choose_bridge::choose_bridge_plugin)
             .add(regain_los::regain_los_plugin)
+            .add(wait::wait_plugin)
     }
 }

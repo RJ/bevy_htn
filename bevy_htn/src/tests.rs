@@ -69,6 +69,7 @@ fn test_cond_bool() {
     let cond = HtnCondition::EqualsBool {
         field: "tog".to_string(),
         value: false,
+        notted: false,
     };
     assert!(cond.evaluate(&state, app.atr()));
     state.tog = true;
@@ -82,6 +83,7 @@ fn test_cond_int() {
     let cond = HtnCondition::EqualsInt {
         field: "counter".to_string(),
         value: 0,
+        notted: false,
     };
     assert!(cond.evaluate(&state, app.atr()));
     state.counter = 1;
@@ -96,6 +98,7 @@ fn test_cond_enum() {
         field: "location".to_string(),
         enum_type: "Location".into(),
         enum_variant: "Home".into(),
+        notted: false,
     };
     assert!(cond.evaluate(&state, app.atr()));
     state.location = Location::Work;
@@ -108,7 +111,7 @@ fn test_parser() {
     // the htn block defines what version of the crate your DSL is written for.
     // i  won't bother with backwards compatability unless there are lots of users on old versions,
     // but having a version string is necessary if I ever need to do that.
-    htn {
+    schema {
         version: 0.1.0
     }
 
@@ -169,11 +172,13 @@ fn test_parser() {
             HtnCondition::EqualsBool {
                 field: "tog".to_string(),
                 value: false,
+                notted: false,
             },
             HtnCondition::EqualsEnum {
                 field: "location".to_string(),
                 enum_type: "Location".into(),
                 enum_variant: "Home".into(),
+                notted: false,
             },
         ]
     );
@@ -208,6 +213,7 @@ fn test_parser() {
         vec![HtnCondition::EqualsBool {
             field: "tog".to_string(),
             value: true,
+            notted: false,
         }]
     );
     assert_eq!(task2.methods[1].preconditions, vec![]);

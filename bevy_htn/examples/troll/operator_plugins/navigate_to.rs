@@ -23,9 +23,8 @@ fn navigate_to_system(
             commands.trigger(ctx.success());
             continue;
         }
-        let speed = 50.0;
         let direction = (navigate_to.0 - troll_transform.translation.xy()).normalize();
-        let movement = direction * speed * time.delta_secs();
+        let movement = direction * TROLL_SPEED * time.delta_secs();
         troll_transform.translation.x += movement.x;
         troll_transform.translation.y += movement.y;
     }

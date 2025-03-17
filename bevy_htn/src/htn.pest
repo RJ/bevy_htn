@@ -2,7 +2,7 @@ EOL = _{("\n" | EOI)}
 WHITESPACE = _{ " " | "\t" | "\r" }
 COMMENT = _{ ("//"|"#") ~ (!"\n" ~ ANY)* ~ EOL }
 
-htn_meta               =  { EOL? ~ "htn" ~ "{" ~ EOL? ~ (COMMENT | htn_version_statement)+ ~ "}" ~ EOL }
+schema                 =  { EOL? ~ "schema" ~ "{" ~ EOL? ~ (COMMENT | schema_version_statement)+ ~ "}" ~ EOL }
 primitive_task         =  { EOL? ~ "primitive_task" ~ STRING ~ "{" ~ EOL? ~ (COMMENT | operator_statement | effects_statement | expected_effects_statement | preconditions_statement)* ~ "}" ~ EOL }
 compound_task          =  { EOL? ~ "compound_task" ~ STRING ~ "{" ~ EOL? ~ (method ~ EOL?)* ~ "}" ~ EOL }
 method                 =  { 
@@ -19,7 +19,7 @@ subtasks_statement     =  {
 
 SEMVER = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+){2} }
 
-htn_version_statement = { "version:" ~ SEMVER ~ EOL }
+schema_version_statement = { "version:" ~ SEMVER ~ EOL }
 
 operator_statement =  { "operator:" ~ operator_def ~ EOL  }
 operator_def       =  { identifier ~ ("(" ~ operator_param* ~ ")")? }
@@ -27,7 +27,7 @@ operator_param     = @{ identifier }
 
 
 condition  = { identifier ~ operator ~ (value | enum_value) }
-operator   = { ">=" | ">" | "<=" | "<" | "==" }
+operator   = { ">=" | ">" | "<=" | "<" | "==" | "!=" }
 effect     = { set_effect | inc_effect | dec_effect }
 // greedy parser, so check for enum_value first otherwise identifier is found before the ::
 set_effect = { identifier ~ "=" ~ (value | enum_value | identifier) }
@@ -61,4 +61,4 @@ expected_effects_statement = {
     "]" ~ EOL 
 }
 
-domain = { SOI ~ WHITESPACE* ~ htn_meta ~ (primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }
+domain = { SOI ~ WHITESPACE* ~ schema ~ (primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }

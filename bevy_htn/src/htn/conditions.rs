@@ -9,6 +9,7 @@ pub enum HtnCondition {
     EqualsBool {
         field: String,
         value: bool,
+        notted: bool,
     },
     GreaterThanInt {
         field: String,
@@ -24,10 +25,12 @@ pub enum HtnCondition {
         field: String,
         enum_type: String,
         enum_variant: String,
+        notted: bool,
     },
     EqualsInt {
         field: String,
         value: i32,
+        notted: bool,
     },
 }
 
@@ -42,10 +45,18 @@ impl HtnCondition {
             .as_struct()
             .expect("State is not a struct");
         match self {
-            HtnCondition::EqualsBool { field, value } => {
+            HtnCondition::EqualsBool {
+                field,
+                value,
+                notted,
+            } => {
                 if let Some(val) = reflected.field(field) {
                     if let Some(b) = val.try_downcast_ref::<bool>() {
-                        *b == *value
+                        if *notted {
+                            *b != *value
+                        } else {
+                            *b == *value
+                        }
                     } else {
                         false
                     }
@@ -91,10 +102,18 @@ impl HtnCondition {
                     false
                 }
             }
-            HtnCondition::EqualsInt { field, value } => {
+            HtnCondition::EqualsInt {
+                field,
+                value,
+                notted,
+            } => {
                 if let Some(val) = reflected.field(field) {
                     if let Some(i) = val.try_downcast_ref::<i32>() {
-                        *i == *value
+                        if *notted {
+                            *i != *value
+                        } else {
+                            *i == *value
+                        }
                     } else {
                         false
                     }
@@ -106,6 +125,7 @@ impl HtnCondition {
                 field,
                 enum_type,
                 enum_variant,
+                notted,
             } => {
                 // https://github.com/makspll/bevy_mod_scripting/blob/a4d1ffbcae98f42393ab447d73efe9b0b543426f/crates/bevy_mod_scripting_core/src/bindings/world.rs#L642
                 if let Some(val) = reflected.field(field) {
@@ -124,7 +144,11 @@ impl HtnCondition {
                         .get_type_by_name(enum_type)
                         .expect("Enum type not found");
                     dynamic.set_represented_type(Some(type_reg.type_info()));
-                    dynamic.reflect_partial_eq(val).unwrap()
+                    if *notted {
+                        !dynamic.reflect_partial_eq(val).unwrap()
+                    } else {
+                        dynamic.reflect_partial_eq(val).unwrap()
+                    }
                 } else {
                     false
                 }
