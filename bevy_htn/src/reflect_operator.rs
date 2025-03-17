@@ -28,7 +28,6 @@ pub struct ReflectHtnOperator(ReflectHtnOperatorFns);
 #[derive(Clone)]
 pub struct ReflectHtnOperatorFns {
     /// Function pointer implementing [`ReflectHtnOperator::trigger()`].
-    pub trigger: fn(&dyn Reflect, Entity, PlannedTaskId) -> TriggerEmitterCommand,
     pub to_tree: fn(&dyn Reflect) -> Option<Tree<Behave>>,
 }
 
@@ -44,16 +43,6 @@ impl ReflectHtnOperatorFns {
 }
 
 impl ReflectHtnOperator {
-    /// Creates Command that will emit the trigger
-    pub fn trigger(
-        &self,
-        event: &dyn Reflect,
-        entity: Entity,
-        task_id: PlannedTaskId,
-    ) -> TriggerEmitterCommand {
-        (self.0.trigger)(event, entity, task_id)
-    }
-
     pub fn to_tree(&self, event: &dyn Reflect) -> Option<Tree<Behave>> {
         (self.0.to_tree)(event)
     }
@@ -72,24 +61,6 @@ impl ReflectHtnOperator {
 impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
     fn from_type() -> Self {
         ReflectHtnOperator(ReflectHtnOperatorFns {
-            trigger: |op, entity, task_id| -> TriggerEmitterCommand {
-                let Some(ev) = op.downcast_ref::<E>() else {
-                    panic!("Event is not of type {}", std::any::type_name::<E>());
-                };
-                let op_event = ev.clone();
-                TriggerEmitterCommand {
-                    f: Box::new(move |world: &mut World| {
-                        let e = HtnTaskExecute {
-                            // Fn closure, can't modify captured env, so clone again (they are small)
-                            inner: op_event.clone(),
-                            task_id: task_id.clone(),
-                            entity,
-                        };
-                        info!("world.trigger_targets({e:?}, {entity})");
-                        world.trigger_targets(e, entity);
-                    }),
-                }
-            },
             to_tree: |op| -> Option<Tree<Behave>> {
                 let Some(ev) = op.downcast_ref::<E>() else {
                     panic!("Event is not of type {}", std::any::type_name::<E>());
@@ -130,69 +101,3 @@ impl Command for TriggerEmitterCommand {
         (self.f)(world);
     }
 }
-
-// pub struct TriggerOperatorCommand<T: Clone + Send + Sync> {
-//     event: Box<T>,
-//     target_entity: Entity,
-// }
-
-// #[derive(Event)]
-// pub struct OperatorTrigger<T> {
-//     operator: Box<T>,
-// }
-
-// pub trait CommandsHtnOperatorExt {
-//     fn trigger_htn_operator(&mut self, operator: Box<dyn HtnOperator>, target_entity: Entity);
-// }
-
-// impl CommandsHtnOperatorExt for Commands {
-//     fn trigger_htn_operator(&mut self, operator: Box<dyn HtnOperator>, target_entity: Entity) {
-//         self.queue(move |world: &mut World| {
-//             world.trigger_targets(operator.trigger_event(), target_entity);
-//         });
-//         // let world = self.world_mut();
-//         // operator.trigger_command(target_entity, world);
-//     }
-// }
-
-// look at dynamic trigger from behave for this?
-
-// /// Operators impl this trait, so they can be emitted as triggers.
-// #[reflect_trait]
-// pub trait HtnOperator {
-//     fn trigger_command(self: Box<Self>, target_entity: Entity, world: &mut World) {
-//         // let mut ot = OperatorTrigger {
-//         //     operator: self.clone(),
-//         // };
-//         // world.trigger_ref(&mut ot);
-//         // commands.trigger;
-//         // let c = self.downcast_ref::<Self>();
-//     }
-//     // {
-//     //     OperatorTrigger {
-//     //         operator: Box::new(self.clone()),
-//     //     }
-//     // }
-//     // world.trigger_targets(
-//     //     OperatorTrigger {
-//     //         operator: Box::new(self),
-//     //     },
-//     //     target_entity,
-//     // );
-//     // let operator = self.clone();
-//     // commands.queue(move |world: &mut World| {
-//     // world.trigger_targets(OperatorTrigger { operator }, target_entity);
-//     // });
-//     // commands.add(TriggerOperatorCommand {
-//     //     event: self.clone(),
-//     //     target_entity,
-//     // });
-//     // }
-//     // fn operator_trait_fn(&self) {
-//     //     info!(
-//     //         "Operator trait fn self = {:#?}, type name = {}",
-//     //         self,
-//     //         std::any::type_name::<Self>()
-//     //     );
-//     // }
-// }

@@ -6,8 +6,10 @@ use bevy_behave::prelude::*;
 use std::marker::PhantomData;
 
 pub enum TaskExecutionStrategy {
-    Command(TriggerEmitterCommand),
-    BehaviourTree(Tree<Behave>),
+    BehaviourTree {
+        tree: Tree<Behave>,
+        task_id: PlannedTaskId,
+    },
 }
 
 #[derive(Clone, Debug, Reflect)]
@@ -51,7 +53,6 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
         &self,
         state: &T,
         type_registry: &TypeRegistry,
-        entity: Entity,
         task_id: &PlannedTaskId,
     ) -> TaskExecutionStrategy {
         let op_type = self.operator.name();
@@ -96,11 +97,13 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
             .data::<ReflectHtnOperator>()
             .expect("`ReflectHtnOperator` should be registered");
 
-        if let Some(tree) = reflect_op.to_tree(boxed_reflect.as_reflect()) {
-            TaskExecutionStrategy::BehaviourTree(tree)
-        } else {
-            let command = reflect_op.trigger(boxed_reflect.as_reflect(), entity, task_id.clone());
-            TaskExecutionStrategy::Command(command)
+        let tree = reflect_op
+            .to_tree(boxed_reflect.as_reflect())
+            .expect("Must return a tree?");
+
+        TaskExecutionStrategy::BehaviourTree {
+            tree,
+            task_id: task_id.clone(),
         }
     }
 

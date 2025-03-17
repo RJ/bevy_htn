@@ -165,6 +165,8 @@ fn on_replan_request<T: Reflect + Component + TypePath + Default + Clone + core:
 }
 
 fn on_plan_added(t: Trigger<OnInsert, Plan>, mut commands: Commands) {
+    // TODO kill any children that are executing an old plan?
+    // get the old plan id and kill just those children?
     commands.trigger_targets(ExecNextTask, t.entity());
 }
 
@@ -248,7 +250,6 @@ fn on_exec_next_task<T: Reflect + Component + TypePath + Default + Clone + core:
         info!("No more tasks to execute");
         return;
     };
-    let task_name = task_id.name();
     let htn = &assets.get(&sup.htn_handle).unwrap().htn;
     let Some(Task::Primitive(task)) = htn.get_task_by_name(task_id.name()) else {
         panic!("Task {task_id:?} is not a primitive on this htn");
@@ -256,14 +257,10 @@ fn on_exec_next_task<T: Reflect + Component + TypePath + Default + Clone + core:
     // this will trigger an HtnTaskExecute<Operator> event on our supervisor entity.
     // but if all we're doing is turning it into a tree, maybe do that internally and yield a non-generic trigger that
     // includes the plan name, task id, and tree?
-    let task_strategy = task.execution_command(state, &type_registry.read(), t.entity(), &task_id);
+    let task_strategy = task.execution_command(state, &type_registry.read(), &task_id);
     match task_strategy {
-        TaskExecutionStrategy::Command(cmd) => {
-            warn!("Executing task: {task_name} via trigger");
-            commands.queue(cmd);
-        }
-        TaskExecutionStrategy::BehaviourTree(tree) => {
-            warn!("Executing task: {task_name} via behaviour tree: {tree}");
+        TaskExecutionStrategy::BehaviourTree { tree, task_id } => {
+            warn!("Executing task: {task_id:?} via behaviour tree: {tree}");
             let troll_entity = parent.get();
             commands
                 .spawn((
@@ -293,16 +290,5 @@ fn task_finished(
             },
             parent.get(),
         );
-        // info!("Task {task_id:?} finished {finished:?} on {entity}");
-        // one level up is the htn sup
-        // let sup_entity = parent.get();
-        // let Ok((mut plan, sup)) = q_sup.get_mut(sup_entity) else {
-        //     error!("HtnSupervisor {sup_entity:?} not found");
-        //     continue;
-        // };
-        // plan.report_task_completion(&task_id, finished.0);
-        // commands.trigger_targets(ExecNextTask, parent.get());
-        // commands.entity(parent.get()).remove_children(&[entity]);
-        // commands.entity(entity).try_despawn_recursive();
     }
 }
