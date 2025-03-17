@@ -14,6 +14,7 @@ mod setup_level;
 use setup_level::*;
 mod operators;
 use operators::*;
+mod operator_plugins;
 
 #[derive(Reflect, Clone, Debug, Default)]
 #[reflect(Default)]
@@ -53,11 +54,11 @@ fn main() {
     app.add_plugins(DefaultPlugins);
     app.add_plugins(DefaultInspectorConfigPlugin);
     app.add_plugins(HtnAssetPlugin::<GameState>::default());
+    app.add_plugins(operator_plugins::OperatorPlugins);
     app.add_plugins(TrollUiPlugin);
     // app.add_plugins(ResourceInspectorPlugin::<GameState>::default());
     app.add_plugins(HtnPlugin::<GameState>::default());
     app.add_plugins(setup_level);
-    app.add_plugins(setup_operators_plugin);
     // app.register_type::<SellGold>();
     // app.add_observer(on_add_sellgold);
 
@@ -207,7 +208,7 @@ fn replan_checker(
     let Some(htn_asset) = assets.get(&htn_supervisor.htn_handle) else {
         return;
     };
-    info!("GameState changed, replan check");
+    info!("🔄 GameState changed, replan check");
     let htn = &htn_asset.htn;
 
     // let type_registry = type_registry.read();
@@ -218,12 +219,12 @@ fn replan_checker(
 
     if let Some(existing_plan) = opt_plan {
         if *existing_plan == plan {
-            info!("Plan is the same as existing, skipping");
+            info!("🔂 Plan is the same as existing, skipping");
             return;
         }
     }
 
-    info!("Inserting Plan: {plan}");
+    info!("🗺️ Inserting Plan: {plan}");
     commands.entity(sup_entity).insert(plan);
 
     // htn_supervisor.plan = Some(Plan {

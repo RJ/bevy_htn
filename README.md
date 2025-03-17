@@ -33,3 +33,16 @@ Meanwhile, external factors can change the planner state. Sensors for the charac
 So when we execute a task from the planner, the sensors should result in changes to the planner state 
 
 https://github.com/makspll/bevy_mod_scripting/blob/a4d1ffbcae98f42393ab447d73efe9b0b543426f/crates/bevy_mod_scripting_core/src/bindings/world.rs#L642
+
+## TODO
+
+HtpOperator to_tree doesn't need to return an Option if we always use it.
+do we still need the htn trigger alternative? that can provide the planned task id, which is
+maybe useful... but can you just get that by querying the Plan component via ctx.supervisor_entity()?
+
+## HTN bugs
+
+troll does 3 attacks, trunk health goes to 0
+starts to move towards trunk to uproot it
+enemy goes out of range, replans, no enemy in range so replans to nav to last enemy pos, roar.
+this causes enemy to become in range, goes back to uproot plan.

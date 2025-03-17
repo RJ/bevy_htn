@@ -172,7 +172,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
     }
 
     pub fn plan(&mut self, initial_state: &T) -> Plan {
-        const SANITY_LIMIT: usize = 1000;
+        const SANITY_LIMIT: usize = 100;
         let mut sanity_count = 0;
         self.reset();
         let mut final_plan = Vec::new();
@@ -233,7 +233,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                         info!("Adding primitive task to plan: {current_task_name}");
                         // add task to final plan
                         final_plan.push(current_task_name);
-                        // apply this task's effects to the working world state
+                        // apply this task's effects to the planner state
                         for effect in primitive.effects.iter() {
                             effect.apply(&mut state, self.atr);
                         }

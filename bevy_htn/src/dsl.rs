@@ -2,7 +2,6 @@ use crate::htn::*;
 use bevy::prelude::*;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
-use std::marker::PhantomData;
 
 #[derive(Parser)]
 #[grammar = "src/htn.pest"]

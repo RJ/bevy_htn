@@ -25,10 +25,10 @@ pub struct Rolodex {
 }
 
 fn create_rolodex(assets: Res<AssetServer>, mut commands: Commands) {
-    let test = assets.load("test.htn");
-    info!("Loading test.htn via asset server.. {test:?}");
+    let troll_htn = assets.load("troll.htn");
+    info!("Loading test.htn via asset server.. {troll_htn:?}");
     commands.insert_resource(Rolodex {
-        troll_htn: test,
+        troll_htn,
         bridge_positions: vec![],
         troll: Entity::PLACEHOLDER,
         player: Entity::PLACEHOLDER,
@@ -189,7 +189,7 @@ fn setup_troll(
 
     rolodex.troll = commands
         .spawn((
-            Transform::from_xyz(BRIDGE_WIDTH + BRIDGE_DIST, 0.0, -3.0),
+            Transform::from_xyz(BRIDGE_WIDTH + BRIDGE_DIST, 0.0, 2.0),
             Text2d::new("Troll"),
             Troll,
             Name::new("Troll"),
@@ -230,7 +230,7 @@ fn setup_player(
 
     rolodex.player = commands
         .spawn((
-            Transform::from_xyz(-BRIDGE_WIDTH / 2.0 - BRIDGE_DIST, 0.0, -2.0),
+            Transform::from_xyz(-BRIDGE_WIDTH / 2.0 - BRIDGE_DIST, 0.0, 3.0),
             Text2d::new("Player"),
             Player,
             Name::new("Player"),

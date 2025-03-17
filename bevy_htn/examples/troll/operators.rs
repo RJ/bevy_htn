@@ -1,12 +1,36 @@
+/*
+    Operators, which are referenced in the HTN domain file, are defined here.
+
+    An operator's job is to implement HtnOperator which provides its behaviour tree.
+
+    To execute an operator as part of a plan is to run its behaviour tree.
+
+
+*/
 use bevy::prelude::*;
 use bevy_behave::prelude::*;
 use bevy_htn::prelude::*;
 
-use crate::GameState;
-
-#[derive(Debug, Reflect, Default, Clone, HtnOperator)]
+/// TODO: attribute to provide the component which supports From<ThisOperator> ?
+#[derive(Debug, Reflect, Default, Clone, Component, HtnOperator)]
 #[reflect(Default, HtnOperator)]
-pub struct DoTrunkSlamOperator;
+#[spawn_named = "Trunk Slam"]
+pub struct DoTrunkSlamOperator {
+    // keep track of animation duration
+    pub start: f32,
+}
+
+// if you remove the HtnOperator Derive (and spawn_named) you can manually provide a tree:
+// impl HtnOperator for DoTrunkSlamOperator {
+//     fn to_tree(&self) -> Option<Tree<Behave>> {
+//         Some(behave! {
+//             Behave::Sequence => {
+//                 Behave::spawn_named("Trunk Slam", TrunkSlamOperator::default()),
+//                 Behave::Wait(3.0),
+//             }
+//         })
+//     }
+// }
 
 #[derive(Debug, Reflect, Default, Clone, HtnOperator)]
 #[reflect(Default, HtnOperator)]
@@ -20,9 +44,12 @@ pub struct FindTrunkOperator;
 #[reflect(Default, HtnOperator)]
 pub struct NavigateToTrunkOperator(Vec2);
 
-#[derive(Debug, Reflect, Default, Clone, HtnOperator)]
+/// This creates a behave!{ Behave::spawn_named("Navigate To", self) }
+/// from this operator, eg inserts as a component for the behaviour tree.
+#[derive(Debug, Reflect, Default, Clone, HtnOperator, Component)]
 #[reflect(Default, HtnOperator)]
-pub struct NavigateToOperator(Vec2);
+#[spawn_named = "Navigate To"]
+pub struct NavigateToOperator(pub Vec2);
 
 #[derive(Debug, Reflect, Default, Clone, HtnOperator)]
 #[reflect(Default, HtnOperator)]
@@ -32,38 +59,10 @@ pub struct RegainLOSOperator;
 #[reflect(Default, HtnOperator)]
 pub struct ChooseBridgeToCheckOperator;
 
-#[derive(Debug, Reflect, Default, Clone, HtnOperator)]
+#[derive(Debug, Reflect, Default, Clone, Component, HtnOperator)]
 #[reflect(Default, HtnOperator)]
-pub struct CheckBridgeOperator;
-
-pub fn setup_operators_plugin(app: &mut App) {
-    app.register_type::<DoTrunkSlamOperator>();
-    app.register_type::<UprootTrunkOperator>();
-    app.register_type::<FindTrunkOperator>();
-    app.register_type::<NavigateToTrunkOperator>();
-    app.register_type::<NavigateToOperator>();
-    app.register_type::<RegainLOSOperator>();
-    app.register_type::<ChooseBridgeToCheckOperator>();
-    app.register_type::<CheckBridgeOperator>();
-
-    app.add_observer(on_choose_bridge_to_check);
-}
-
-fn on_choose_bridge_to_check(
-    t: Trigger<HtnTaskExecute<ChooseBridgeToCheckOperator>>,
-    mut q: Query<(&mut GameState, &mut Plan)>,
-    mut commands: Commands,
-) {
-    info!("ChooseBridgeToCheckOperator {}", t.entity());
-    let (mut state, mut _plan) = q.get_mut(t.entity()).unwrap();
-    state.next_bridge_to_check = 1 + (state.next_bridge_to_check + 1) % 3;
-    // this needs to exec the next task somehow:
-    // maybe trigger a report we get from the trigger to centralize reporting status,
-    // so we can trigger the next task?
-    //
-    // or have this report update aplan internal "next job" thing we can pop off in the replan checker
-    commands.trigger_targets(
-        TaskComplete::new(t.event().task_id().clone(), true),
-        t.event().entity(),
-    );
+#[spawn_named = "Check Bridge"]
+pub struct CheckBridgeOperator {
+    pub bridge_position: Vec2,
+    pub start: f32,
 }

@@ -79,6 +79,7 @@ fn on_task_complete<T: Reflect + Component + TypePath + Default + Clone + core::
         match task {
             Task::Primitive(primitive) => {
                 warn!("Applying effects for primitive task: {task_id:?}");
+                // TODO perhaps bypass change detection here?
                 primitive.apply_effects(&mut state, atr.as_ref());
             }
             Task::Compound(_compound) => {}
@@ -137,13 +138,14 @@ fn on_exec_next_task<T: Reflect + Component + TypePath + Default + Clone + core:
             commands.queue(cmd);
         }
         TaskExecutionStrategy::BehaviourTree(tree) => {
-            warn!("Executing task: {task_name} via behaviour tree");
+            warn!("Executing task: {task_name} via behaviour tree: {tree}");
             let troll_entity = parent.get();
             commands
                 .spawn((
                     task_id,
                     BehaveTree::new(tree),
                     BehaveTargetEntity::Entity(troll_entity),
+                    BehaveSupervisorEntity(t.entity()),
                 ))
                 .set_parent(t.entity());
         }
