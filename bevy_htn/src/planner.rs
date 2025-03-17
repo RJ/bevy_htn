@@ -48,7 +48,7 @@ impl Plan {
     }
 
     /// Marks next task as running and returns the planned task id
-    pub fn execute_next_task(&mut self) -> Option<PlannedTaskId> {
+    pub fn next_task_to_execute(&mut self) -> Option<PlannedTaskId> {
         if self.status.is_some() {
             warn!("Plan already has a status, cannot execute next task.");
             return None;

@@ -51,28 +51,28 @@ pub struct HtnSupervisor<T: Reflect + TypePath + Default + Clone + core::fmt::De
     pub htn_handle: Handle<HtnAsset<T>>,
 }
 
-#[derive(Event)]
-pub struct KillRunningTaskChildren;
+// #[derive(Event)]
+// pub struct KillRunningTaskChildren;
 
-fn on_kill_running_task_children<
-    T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug,
->(
-    t: Trigger<KillRunningTaskChildren>,
-    q: Query<&Children, With<HtnSupervisor<T>>>,
-    q_children: Query<Entity, With<PlannedTaskId>>,
-    mut commands: Commands,
-) {
-    if let Ok(children) = q.get(t.entity()) {
-        for child in children.iter().filter(|c| q_children.contains(**c)) {
-            info!("Killing child executing old plan: {child:?}");
-            commands
-                .entity(t.entity())
-                .remove_children(&[*child])
-                .remove::<PlannedTaskId>();
-            commands.entity(*child).despawn_recursive();
-        }
-    }
-}
+// fn on_kill_running_task_children<
+//     T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug,
+// >(
+//     t: Trigger<KillRunningTaskChildren>,
+//     q: Query<&Children, With<HtnSupervisor<T>>>,
+//     q_children: Query<Entity, With<PlannedTaskId>>,
+//     mut commands: Commands,
+// ) {
+//     if let Ok(children) = q.get(t.entity()) {
+//         for child in children.iter().filter(|c| q_children.contains(**c)) {
+//             info!("Killing child executing old plan: {child:?}");
+//             commands
+//                 .entity(t.entity())
+//                 .remove_children(&[*child])
+//                 .remove::<PlannedTaskId>();
+//             commands.entity(*child).despawn_recursive();
+//         }
+//     }
+// }
 
 // do we need to replan? is the current plan still valid?
 fn when_to_replan_system<T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug>(
@@ -87,12 +87,14 @@ fn when_to_replan_system<T: Reflect + Component + TypePath + Default + Clone + c
             return;
         };
         // the game state has changed, is the current plan still valid?
-
+        // we copy the current ECS world state as a starting point, to which we applyy all tasks
+        // effects as we walk the task list.
+        let mut working_state = state.clone();
         let mut existing_plan_still_valid = true;
         for task_name in plan.tasks.iter() {
             let task = htn.get_task_by_name(task_name.name.as_str()).unwrap();
             if let Task::Primitive(task) = task {
-                if !task.preconditions_met(state, atr.as_ref()) {
+                if !task.preconditions_met(&working_state, atr.as_ref()) {
                     info!(
                         "Aborting current plan, preconditions not met: {}",
                         task_name.name
@@ -100,6 +102,8 @@ fn when_to_replan_system<T: Reflect + Component + TypePath + Default + Clone + c
                     existing_plan_still_valid = false;
                     break;
                 }
+                task.apply_effects(&mut working_state, atr.as_ref());
+                task.apply_expected_effects(&mut working_state, atr.as_ref());
             } else {
                 panic!("Non primitive task in plan, should not happen");
             }
@@ -138,20 +142,22 @@ fn on_replan_request<T: Reflect + Component + TypePath + Default + Clone + core:
     };
 
     let mut planner = HtnPlanner::new(htn, atr.as_ref());
-    let plan = planner.plan(state);
-    let existing_plan_active = plan.status().is_none();
-    if existing_plan_active {
-        if let Some(existing_plan) = opt_plan {
-            if *existing_plan == plan {
+    let new_plan = planner.plan(state);
+
+    if let Some(existing_plan) = opt_plan {
+        let existing_plan_active = existing_plan.status().is_none();
+        // if existing plan is finished, we'll have to replan anyway.
+        if existing_plan_active {
+            if *existing_plan == new_plan {
                 info!("🔂 Plan is the same as existing, skipping");
                 return;
             }
             // seems ok but plans that are finished need to not exist, because finished high pri
             // plans are trumping new ones atm.
             // need to make overall plan completion work better.
-            if *existing_plan > plan {
-                warn!("Existing plan has higher priority, ignoring new plan.");
-                warn!("Ignored New plan: {plan}");
+            if *existing_plan > new_plan {
+                warn!("Existing plan, which is active, has higher priority, ignoring new plan.");
+                warn!("Ignored New plan: {new_plan}");
                 warn!(
                     "Existing plan: {existing_plan} status: {:?}",
                     existing_plan.status()
@@ -160,8 +166,9 @@ fn on_replan_request<T: Reflect + Component + TypePath + Default + Clone + core:
             }
         }
     }
-    info!("🗺️ Inserting New Plan: {plan}");
-    commands.entity(t.entity()).insert(plan);
+
+    info!("🗺️ Inserting New Plan: {new_plan}");
+    commands.entity(t.entity()).insert(new_plan);
 }
 
 fn on_plan_added(t: Trigger<OnInsert, Plan>, mut commands: Commands) {
@@ -231,7 +238,8 @@ fn on_exec_next_task<T: Reflect + Component + TypePath + Default + Clone + core:
     type_registry: Res<AppTypeRegistry>,
     mut commands: Commands,
 ) {
-    let Ok((children, parent, sup, mut plan, state)) = q.get_mut(t.entity()) else {
+    let sup_entity = t.entity();
+    let Ok((children, parent, sup, mut plan, state)) = q.get_mut(sup_entity) else {
         error!("HtnSupervisor not found");
         return;
     };
@@ -246,7 +254,7 @@ fn on_exec_next_task<T: Reflect + Component + TypePath + Default + Clone + core:
             commands.entity(*child).despawn_recursive();
         }
     }
-    let Some(task_id) = plan.execute_next_task() else {
+    let Some(task_id) = plan.next_task_to_execute() else {
         info!("No more tasks to execute");
         return;
     };
@@ -254,6 +262,13 @@ fn on_exec_next_task<T: Reflect + Component + TypePath + Default + Clone + core:
     let Some(Task::Primitive(task)) = htn.get_task_by_name(task_id.name()) else {
         panic!("Task {task_id:?} is not a primitive on this htn");
     };
+    if !task.preconditions_met(state, type_registry.as_ref()) {
+        info!("Task {task_id:?} preconditions not met, failing plan - replanning.");
+        plan.abort();
+        commands.trigger_targets(ReplanRequest, sup_entity);
+        return;
+    }
+
     // this will trigger an HtnTaskExecute<Operator> event on our supervisor entity.
     // but if all we're doing is turning it into a tree, maybe do that internally and yield a non-generic trigger that
     // includes the plan name, task id, and tree?

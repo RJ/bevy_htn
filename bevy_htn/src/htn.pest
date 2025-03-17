@@ -1,14 +1,20 @@
-EOL = _{(" " | "\t" | "\r")* ~ ("\n" | EOI)}
-WHITESPACE = _{ " " | "\t" }
+EOL = _{("\n" | EOI)}
+WHITESPACE = _{ " " | "\t" | "\r" }
+COMMENT = _{ ("//"|"#") ~ (!"\n" ~ ANY)* ~ EOL }
 
-primitive_task         =  { EOL? ~ "primitive_task" ~ STRING ~ "{" ~ EOL? ~ (comment | operator_statement | effects_statement | expected_effects_statement | preconditions_statement)* ~ "}" ~ EOL }
+primitive_task         =  { EOL? ~ "primitive_task" ~ STRING ~ "{" ~ EOL? ~ (COMMENT | operator_statement | effects_statement | expected_effects_statement | preconditions_statement)* ~ "}" ~ EOL }
 compound_task          =  { EOL? ~ "compound_task" ~ STRING ~ "{" ~ EOL? ~ (method ~ EOL?)* ~ "}" ~ EOL }
 method                 =  { 
     EOL? ~ "method" ~ (STRING)? ~ "{" ~ EOL? ~ 
-    (comment | preconditions_statement | subtasks_statement)* ~ 
+    (COMMENT | preconditions_statement | subtasks_statement)* ~ 
     "}" ~ EOL? 
 }
-subtasks_statement     =  { "subtasks:" ~ "[" ~ EOL? ~ (identifier ~ ("," ~ EOL? ~ identifier)* ~ ","? ~ EOL?)? ~ "]" ~ EOL }
+subtasks_statement     =  { 
+    "subtasks:" ~ "[" ~ EOL? ~ 
+    COMMENT? ~
+    (identifier ~ ("," ~ EOL? ~ identifier)* ~ ","? ~ EOL? ~ COMMENT?)? ~ 
+    "]" ~ EOL 
+}
 
 operator_statement =  { "operator:" ~ operator_def ~ EOL  }
 operator_def       =  { identifier ~ ("(" ~ operator_param* ~ ")")? }
@@ -28,8 +34,6 @@ enum_value = @{ identifier ~ "::" ~ identifier }
 value      = @{ ("true" | "false") | "-"? ~ ASCII_DIGIT+ }
 STRING     = @{ "\"" ~ ((!"\"" ~ ANY))* ~ "\"" }
 
-comment = _{ ("#" | "//") ~ (!"\n" ~ ANY)* ~ ("\n" | EOI) }
-
 preconditions_statement = { 
     "preconditions:" ~ "[" ~ EOL? ~
     (condition ~ ("," ~ EOL? ~ condition)* ~ ","? ~ EOL?)? ~
@@ -38,14 +42,16 @@ preconditions_statement = {
 
 effects_statement = { 
     "effects:" ~ "[" ~ EOL? ~
+    COMMENT? ~
     (effect ~ ("," ~ EOL? ~ effect)* ~ ","? ~ EOL?)? ~
     "]" ~ EOL 
 }
 
 expected_effects_statement = { 
     "expected_effects:" ~ "[" ~ EOL? ~
+    COMMENT? ~
     (effect ~ ("," ~ EOL? ~ effect)* ~ ","? ~ EOL?)? ~
     "]" ~ EOL 
 }
 
-htn = { SOI ~ WHITESPACE* ~ (comment | primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }
+htn = { SOI ~ WHITESPACE* ~ (primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }

@@ -1,11 +1,5 @@
-/// No built-in ReflectHtnOperator in bevy, unlike ReflectComponent.
-///
-/// This implementation yields a Command that can be applied to call world.trigger.
 use bevy::{prelude::*, reflect::FromType};
-
 use bevy_behave::prelude::*;
-
-use crate::planner::PlannedTaskId;
 
 /// A trait derived for all HTN operator structs that get triggered when executing a task.
 pub trait HtnOperator: Reflect + Default + Clone + std::fmt::Debug {
@@ -68,36 +62,5 @@ impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
                 ev.to_tree()
             },
         })
-    }
-}
-
-#[derive(Event, Debug, Clone)]
-pub struct HtnTaskExecute<T: Clone + std::fmt::Debug> {
-    inner: T,
-    task_id: PlannedTaskId,
-    entity: Entity,
-}
-
-impl<T: Clone + std::fmt::Debug> HtnTaskExecute<T> {
-    pub fn inner(&self) -> &T {
-        &self.inner
-    }
-
-    pub fn task_id(&self) -> &PlannedTaskId {
-        &self.task_id
-    }
-
-    pub fn entity(&self) -> Entity {
-        self.entity
-    }
-}
-
-pub struct TriggerEmitterCommand {
-    f: Box<dyn Fn(&mut World) + Send>,
-}
-
-impl Command for TriggerEmitterCommand {
-    fn apply(self, world: &mut World) {
-        (self.f)(world);
     }
 }

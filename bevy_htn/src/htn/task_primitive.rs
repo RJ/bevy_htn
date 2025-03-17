@@ -114,6 +114,13 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
         }
     }
 
+    pub fn apply_expected_effects(&self, state: &mut T, atr: &AppTypeRegistry) {
+        for effect in self.expected_effects.iter() {
+            info!("APPLY(expected): {effect:?}");
+            effect.apply(state, atr);
+        }
+    }
+
     /// Checks that every operator has the correct type registry entries and that any fields used
     /// by operators are also present in the state.
     pub fn verify_operator(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {

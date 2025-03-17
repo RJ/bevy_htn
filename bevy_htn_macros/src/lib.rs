@@ -8,7 +8,7 @@ use syn::{parse_macro_input, DeriveInput, Expr, Lit, Meta};
 /// If the `spawn_named` attribute is present, the behaviour tree will be generated to
 /// execute `Behave::spawn_named(name, self.clone())` instead:
 ///
-/// ```rust
+/// ```rust,ignore
 /// #[derive(Debug, Reflect, Default, Clone, HtnOperator)]
 /// #[reflect(Default, HtnOperator)]
 /// #[spawn_named = "Eat a suculent meal"]

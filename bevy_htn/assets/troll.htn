@@ -32,6 +32,10 @@ compound_task "AttackEnemy" {
             FindTrunk,
             NavigateToTrunk,
             UprootTrunk,
+            // by this point we probably can't see the enemy, so this next node will plan tasks
+            // that will not be satisfied at execution time.
+            // we could set the expected effect of navigating to trunk that can_see_enemy = false?
+            // or pause execution of plan here instead of recursing?
             AttackEnemy,
         ]
     }
