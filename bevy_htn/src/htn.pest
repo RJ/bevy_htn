@@ -2,7 +2,7 @@ EOL = _{("\n" | EOI)}
 WHITESPACE = _{ " " | "\t" | "\r" }
 COMMENT = _{ ("//"|"#") ~ (!"\n" ~ ANY)* ~ EOL }
 
-htn                    =  { EOL? ~ "htn" ~ "{" ~ EOL? ~ (COMMENT | htn_version_statement)+ ~ "}" ~ EOL }
+htn_meta               =  { EOL? ~ "htn" ~ "{" ~ EOL? ~ (COMMENT | htn_version_statement)+ ~ "}" ~ EOL }
 primitive_task         =  { EOL? ~ "primitive_task" ~ STRING ~ "{" ~ EOL? ~ (COMMENT | operator_statement | effects_statement | expected_effects_statement | preconditions_statement)* ~ "}" ~ EOL }
 compound_task          =  { EOL? ~ "compound_task" ~ STRING ~ "{" ~ EOL? ~ (method ~ EOL?)* ~ "}" ~ EOL }
 method                 =  { 
@@ -61,4 +61,4 @@ expected_effects_statement = {
     "]" ~ EOL 
 }
 
-domain = { SOI ~ WHITESPACE* ~ htn ~ (primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }
+domain = { SOI ~ WHITESPACE* ~ htn_meta ~ (primitive_task | compound_task)+ ~ WHITESPACE* ~ EOI }

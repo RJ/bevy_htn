@@ -1,19 +1,29 @@
 use super::*;
 use bevy::prelude::*;
 
+#[derive(Debug, Reflect, Clone, Default)]
+pub struct HTNMeta {
+    pub version: String,
+}
+
 /// This is the HTN domain - a list of all the compound and primitive tasks.
 #[derive(Debug, Reflect, Clone)]
 pub struct HTN<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
     pub tasks: Vec<Task<T>>,
-    pub version: String,
+    pub meta: HTNMeta,
 }
 
 impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
     pub fn builder() -> HTNBuilder<T> {
         HTNBuilder {
             tasks: Vec::new(),
-            version: "".to_string(),
+            meta: HTNMeta::default(),
         }
+    }
+
+    /// Gets version declared in the htn block.
+    pub fn version(&self) -> &str {
+        &self.meta.version
     }
 
     /// Returns the task with the given name.
@@ -44,7 +54,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
 
 pub struct HTNBuilder<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
     tasks: Vec<Task<T>>,
-    version: String,
+    meta: HTNMeta,
 }
 
 impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
@@ -58,8 +68,8 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
         self
     }
 
-    pub fn version(mut self, version: String) -> Self {
-        self.version = version;
+    pub fn meta(mut self, meta: HTNMeta) -> Self {
+        self.meta = meta;
         self
     }
 
@@ -78,7 +88,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
     pub fn build(self) -> HTN<T> {
         HTN {
             tasks: self.tasks,
-            version: self.version,
+            meta: self.meta,
         }
     }
 }

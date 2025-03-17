@@ -252,17 +252,14 @@ fn parse_compound_task<T: Reflect + Default + TypePath + Clone + core::fmt::Debu
     builder.build()
 }
 
-// just yields the version string for now.
-fn parse_htn_block<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
-    pair: Pair<Rule>,
-) -> String {
+fn parse_htn_meta(pair: Pair<Rule>) -> HTNMeta {
     let mut inner_rules = pair.into_inner();
     let htn_version_statement = inner_rules.next().unwrap();
     if htn_version_statement.as_rule() == Rule::htn_version_statement {
         let version_pair = htn_version_statement.into_inner().next().unwrap();
         if version_pair.as_rule() == Rule::SEMVER {
             let version = version_pair.as_str().to_string();
-            version
+            HTNMeta { version }
         } else {
             panic!("Invalid version: {}", version_pair.as_str());
         }
@@ -274,7 +271,7 @@ fn parse_htn_block<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
     }
 }
 
-// TODO error handling
+// TODO error handling. return Result..
 pub fn parse_htn<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
     input: &str,
 ) -> HTN<T> {
@@ -284,9 +281,9 @@ pub fn parse_htn<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
     let htn_pair = pairs.into_iter().next().unwrap();
     for pair in htn_pair.into_inner() {
         match pair.as_rule() {
-            Rule::htn => {
-                let version = parse_htn_block::<T>(pair);
-                htn_builder = htn_builder.version(version);
+            Rule::htn_meta => {
+                let meta = parse_htn_meta(pair);
+                htn_builder = htn_builder.meta(meta);
             }
             Rule::primitive_task => {
                 let task = parse_primitive_task::<T>(pair);

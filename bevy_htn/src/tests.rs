@@ -149,7 +149,7 @@ fn test_parser() {
     }
     "#;
     let htn = parse_htn::<TestState>(src);
-    assert_eq!(htn.version, "0.1.0");
+    assert_eq!(htn.version(), "0.1.0");
     assert_eq!(htn.tasks.len(), 2);
     let Task::Primitive(task1) = &htn.tasks[0] else {
         panic!("Task is not a primitive");
