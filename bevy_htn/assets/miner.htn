@@ -11,15 +11,16 @@ compound_task "EarnGold" {
         preconditions: [gold >= 3]
         subtasks: []
     }
+    
     method "Convert metal to gold" {
-        preconditions: [has_metal == true]
+        //preconditions: [has_metal == true]
         subtasks: [
             TurnMetalIntoGold,
             EarnGold,
         ]
     }
     method "Convert ore to gold" {
-        preconditions: [has_metal == false, has_ore == true]
+        //preconditions: [has_metal == false, has_ore == true]
         subtasks: [
             TurnOreIntoMetal,
             EarnGold,

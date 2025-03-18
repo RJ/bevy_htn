@@ -47,6 +47,10 @@ impl Plan {
         self.status = Some(false);
     }
 
+    pub fn task_names(&self) -> Vec<String> {
+        self.tasks.iter().map(|t| t.name.clone()).collect()
+    }
+
     /// Marks next task as running and returns the planned task id
     pub fn next_task_to_execute(&mut self) -> Option<PlannedTaskId> {
         if self.status.is_some() {
@@ -196,7 +200,7 @@ pub enum TaskStatus {
 struct DecompositionState {
     current_task: String,
     final_plan: Vec<String>,
-    next_method_index: usize,
+    skip_methods: usize,
     mtr: Vec<usize>,
 }
 
@@ -204,7 +208,7 @@ pub struct HtnPlanner<'a, T: Reflect + Default + TypePath + Clone + core::fmt::D
     htn: &'a HTN<T>,
     task_stack: VecDeque<String>,
     decomp_stack: Vec<DecompositionState>,
-    method_index: usize,
+    skip_methods: usize,
     atr: &'a AppTypeRegistry,
     mtr: Vec<usize>,
 }
@@ -215,7 +219,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             task_stack: VecDeque::new(),
             htn,
             decomp_stack: Vec::new(),
-            method_index: 0,
+            skip_methods: 0,
             atr,
             mtr: Vec::new(),
         }
@@ -224,7 +228,7 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
     fn reset(&mut self) {
         self.decomp_stack.clear();
         self.task_stack.clear();
-        self.method_index = 0;
+        self.skip_methods = 0;
         self.mtr.clear();
     }
 
@@ -250,16 +254,50 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                 final_plan.clear();
                 break;
             };
+
+            // if let Some(top_task) = self.decomp_stack.last().map(|d| d.current_task.clone()) {
+            //     if top_task == current_task_name {
+            //         info!("Resetting skip_methods to 0 for {current_task_name}");
+            //         self.skip_methods = 0;
+            //     }
+            // }
+
             // info!(
             //     "Processing: {current_task_name} Stack: {:?}",
             //     self.task_stack
             // );
-            info!("planner state: {state:?}");
+            info!(
+                "EVALUATING {current_task_name} with self.skip_methods = {}",
+                self.skip_methods
+            );
+            info!(" planner state: {state:?}");
+            info!(" decomp stack len: {:?}", self.decomp_stack.len());
             match task {
                 Task::Compound(compound) => {
                     // find the first method with passing preconditions
+
+                    // for (method_index, method) in
+                    //     compound.methods.iter().enumerate().skip(self.skip_methods)
+                    // {
+                    //     let valid = method
+                    //         .preconditions
+                    //         .iter()
+                    //         .all(|cond| cond.evaluate(&state, self.atr));
+                    //     if !valid {
+                    //         info!(
+                    //             "🟥 {current_task_name} method: {method_index} - {} (skipped {}) PRECONDITIONS NOT MET",
+                    //             method
+                    //                 .name
+                    //                 .clone()
+                    //                 .unwrap_or_else(|| format!("#{method_index}")),
+                    //             self.skip_methods,
+                    //         );
+                    //         continue;
+                    //     }
+                    // }
+
                     if let Some((method, method_index)) =
-                        compound.find_method(&state, self.method_index, self.atr)
+                        compound.find_method(&state, self.skip_methods, self.atr)
                     {
                         info!(
                             "🟨 {current_task_name} -> {} (using index: {method_index}, skipped {})",
@@ -267,25 +305,36 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                                 .name
                                 .clone()
                                 .unwrap_or_else(|| format!("#{method_index}")),
-                            self.method_index,
+                            self.skip_methods,
                         );
                         self.mtr.push(method_index);
                         // record decomposition
                         let decomposition = DecompositionState {
                             current_task: current_task_name.clone(),
                             final_plan: final_plan.clone(),
-                            next_method_index: method_index + 1,
+                            // method index 0 based, skip is number to skip:
+                            skip_methods: method_index + 1,
                             mtr: self.mtr.clone(),
                         };
+                        info!("📚 Adding {decomposition:?}");
                         self.decomp_stack.push(decomposition);
                         // add subtasks to the stack, preserving order
                         for subtask in method.subtasks.iter().rev() {
                             self.task_stack.push_front(subtask.clone());
                         }
+                        info!("🟡 Adding decomposed tasks to plan: {:?}", method.subtasks);
+                        // do we need to reset the skip_methods when recursively calling ourself?
+
+                        // info!("💫 Resetting skip_methods to 0 for {current_task_name}");
+                        self.skip_methods = 0;
+                        // how? TODO
                         continue;
                     } else {
-                        info!("🟥 Compound task {current_task_name} has no valid method");
-                        info!("Current state: {state:?}");
+                        info!(
+                            "🟥 Compound task {current_task_name} has no valid method, skip: {} \nstate was {state:?}",
+                            self.skip_methods
+                        );
+                        // info!("Current state: {state:?}");
                         // fall through to restore decomp
                     }
                 }
@@ -307,8 +356,8 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
                         // info!("Working state is now: {state:?}");
                         continue;
                     } else {
-                        info!("🔴 Primitive task preconditions not met: {current_task_name}");
-                        info!("Current state: {state:?}");
+                        info!("🔴 Primitive task preconditions not met: {current_task_name}\nstate was: {state:?}");
+                        // info!("Current state: {state:?}");
                         // fall through to restore decomp
                     }
                 }
@@ -316,14 +365,14 @@ impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<
             if let Some(decomp) = self.decomp_stack.pop() {
                 warn!("Restoring decomp {decomp:?}");
                 final_plan = decomp.final_plan;
-                self.method_index = decomp.next_method_index;
+                self.skip_methods = decomp.skip_methods;
                 self.task_stack.push_front(decomp.current_task);
                 self.mtr = decomp.mtr;
             } else {
                 warn!("No decomp, plan failed?");
             }
         }
-        // info!("Planning final state: {state:#?}");
+        info!("Planning final state: {state:#?}");
         Plan::new(final_plan, self.mtr.clone())
     }
 }

@@ -147,9 +147,9 @@ fn on_htn_loaded(
     };
     let mut planner = HtnPlanner::new(htn, atr.as_ref());
     let plan = planner.plan(&state);
-    info!("Plan: {plan:#?}");
+    info!("Plan found, contains {} tasks.", plan.tasks.len());
     info!(
-        "{:?}",
+        "Tasks: {:?}",
         plan.tasks
             .into_iter()
             .map(|pt| pt.name)

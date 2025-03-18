@@ -226,3 +226,110 @@ fn test_parser() {
     assert_eq!(task2.methods[0].subtasks, vec!["TestTask1".to_string()]);
     assert_eq!(task2.methods[1].subtasks, vec!["FooTask".to_string()]);
 }
+
+#[test]
+fn test_travel_htn() {
+    {
+        // Don't need app, just want to set up the logger.
+        let mut app = App::new();
+        app.add_plugins(bevy::log::LogPlugin::default());
+    }
+
+    info!("Test travel HTN");
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
+    #[reflect(Default)]
+    enum Location {
+        #[default]
+        Home,
+        Other,
+        Park,
+    }
+
+    #[derive(Reflect, Resource, Clone, Debug, Default)]
+    #[reflect(Default, Resource)]
+    struct TravelState {
+        cash: i32,
+        dest_dist: i32,
+        location: Location,
+        taxi_location: Location,
+    }
+
+    let src = r#"
+    schema {
+        version: 0.1.0
+    }
+
+    compound_task "TravelToPark" {
+        method {
+            subtasks: [ Walk ]
+        }
+        method {
+            subtasks: [ Taxi ]
+        }
+    }
+
+    primitive_task "Walk" {
+        operator: WalkOperator
+        preconditions: [dest_dist <= 4, location != Location::Park]
+        effects: [
+            location = Location::Park,
+        ]
+    }
+
+    compound_task "Taxi" {
+        method {
+            subtasks: [CallTaxi, RideTaxi, PayTaxi]
+        }
+    }
+
+    primitive_task "CallTaxi" {
+        operator: TaxiOperator
+        preconditions: [taxi_location != Location::Home, cash >= 1]
+        effects: [taxi_location = Location::Home]
+    }
+
+    primitive_task "RideTaxi" {
+        operator: RideTaxiOperator
+        preconditions: [taxi_location == Location::Home, cash >= 1]
+        effects: [taxi_location = Location::Park, location = Location::Park]
+    }
+
+    primitive_task "PayTaxi" {
+        operator: PayTaxiOperator
+        preconditions: [taxi_location == Location::Park, cash >= 1]
+        effects: [cash -= 1]
+    }
+    "#;
+    let atr = AppTypeRegistry::default();
+    {
+        let mut atr = atr.write();
+        atr.register::<TravelState>();
+        atr.register::<Location>();
+    }
+    let htn = parse_htn::<TravelState>(src);
+    let mut planner = HtnPlanner::new(&htn, &atr);
+
+    {
+        warn!("Testing walking state");
+        let initial_state = TravelState {
+            cash: 10,
+            dest_dist: 1,
+            location: Location::Home,
+            taxi_location: Location::Other,
+        };
+        let plan = planner.plan(&initial_state);
+        assert_eq!(plan.task_names(), vec!["Walk"]);
+    }
+
+    {
+        warn!("Testing taxi state");
+        let initial_state = TravelState {
+            cash: 10,
+            dest_dist: 5,
+            location: Location::Home,
+            taxi_location: Location::Other,
+        };
+        let plan = planner.plan(&initial_state);
+        assert_eq!(plan.task_names(), vec!["CallTaxi", "RideTaxi", "PayTaxi"]);
+    }
+}
