@@ -44,6 +44,7 @@ fn test_set_bool() {
     let effect = Effect::SetBool {
         field: "tog".to_string(),
         value: true,
+        syntax: "tog = true".to_string(),
     };
     effect.apply(&mut state, app.atr());
     assert!(state.tog);
@@ -57,6 +58,7 @@ fn test_set_enum() {
         field: "location".to_string(),
         enum_type: "Location".into(),
         enum_variant: "Work".into(),
+        syntax: "location = Location::Work".to_string(),
     };
     effect.apply(&mut state, app.atr());
     assert_eq!(state.location, Location::Work);
@@ -70,6 +72,7 @@ fn test_cond_bool() {
         field: "tog".to_string(),
         value: false,
         notted: false,
+        syntax: "tog == false".to_string(),
     };
     assert!(cond.evaluate(&state, app.atr()));
     state.tog = true;
@@ -84,6 +87,7 @@ fn test_cond_int() {
         field: "counter".to_string(),
         value: 0,
         notted: false,
+        syntax: "counter == 0".to_string(),
     };
     assert!(cond.evaluate(&state, app.atr()));
     state.counter = 1;
@@ -99,6 +103,7 @@ fn test_cond_enum() {
         enum_type: "Location".into(),
         enum_variant: "Home".into(),
         notted: false,
+        syntax: "location == Location::Home".to_string(),
     };
     assert!(cond.evaluate(&state, app.atr()));
     state.location = Location::Work;
@@ -164,6 +169,7 @@ fn test_parser() {
             field: "location".to_string(),
             enum_type: "Location".into(),
             enum_variant: "Work".into(),
+            syntax: "location = Location::Work".to_string(),
         }]
     );
     assert_eq!(
@@ -173,12 +179,14 @@ fn test_parser() {
                 field: "tog".to_string(),
                 value: false,
                 notted: false,
+                syntax: "tog == false".to_string(),
             },
             HtnCondition::EqualsEnum {
                 field: "location".to_string(),
                 enum_type: "Location".into(),
                 enum_variant: "Home".into(),
                 notted: false,
+                syntax: "location == Location::Home".to_string(),
             },
         ]
     );
@@ -188,10 +196,12 @@ fn test_parser() {
             Effect::SetBool {
                 field: "tog".to_string(),
                 value: true,
+                syntax: "tog = true".to_string(),
             },
             Effect::IncrementInt {
                 field: "counter".to_string(),
                 by: -1,
+                syntax: "counter -= 1".to_string(),
             },
         ]
     );
@@ -201,6 +211,7 @@ fn test_parser() {
             field: "location".to_string(),
             enum_type: "Location".into(),
             enum_variant: "Work".into(),
+            syntax: "location = Location::Work".to_string(),
         }
     );
     let Task::Compound(task2) = &htn.tasks[1] else {
@@ -214,6 +225,7 @@ fn test_parser() {
             field: "tog".to_string(),
             value: true,
             notted: false,
+            syntax: "tog == true".to_string(),
         }]
     );
     assert_eq!(task2.methods[1].preconditions, vec![]);
@@ -245,12 +257,28 @@ fn test_travel_htn() {
         Park,
     }
 
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
+    #[reflect(Default, HtnOperator)]
+    struct WalkOperator;
+
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
+    #[reflect(Default, HtnOperator)]
+    struct TaxiOperator;
+
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
+    #[reflect(Default, HtnOperator)]
+    struct RideTaxiOperator;
+
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
+    #[reflect(Default, HtnOperator)]
+    struct PayTaxiOperator;
+
     #[derive(Reflect, Resource, Clone, Debug, Default)]
     #[reflect(Default, Resource)]
     struct TravelState {
         cash: i32,
-        dest_dist: i32,
-        location: Location,
+        distance_to_park: i32,
+        my_location: Location,
         taxi_location: Location,
     }
 
@@ -267,12 +295,12 @@ fn test_travel_htn() {
             subtasks: [ Taxi ]
         }
     }
-
+            
     primitive_task "Walk" {
         operator: WalkOperator
-        preconditions: [dest_dist <= 4, location != Location::Park]
+        preconditions: [distance_to_park <= 4, my_location != Location::Park]
         effects: [
-            location = Location::Park,
+            my_location = Location::Park,
         ]
     }
 
@@ -284,14 +312,14 @@ fn test_travel_htn() {
 
     primitive_task "CallTaxi" {
         operator: TaxiOperator
-        preconditions: [taxi_location != Location::Home, cash >= 1]
+        preconditions: [taxi_location != Location::Park, cash >= 1]
         effects: [taxi_location = Location::Home]
     }
 
     primitive_task "RideTaxi" {
         operator: RideTaxiOperator
         preconditions: [taxi_location == Location::Home, cash >= 1]
-        effects: [taxi_location = Location::Park, location = Location::Park]
+        effects: [taxi_location = Location::Park, my_location = Location::Park]
     }
 
     primitive_task "PayTaxi" {
@@ -305,16 +333,37 @@ fn test_travel_htn() {
         let mut atr = atr.write();
         atr.register::<TravelState>();
         atr.register::<Location>();
+        atr.register::<WalkOperator>();
+        atr.register::<TaxiOperator>();
+        atr.register::<RideTaxiOperator>();
+        atr.register::<PayTaxiOperator>();
     }
     let htn = parse_htn::<TravelState>(src);
+    // verify via reflection that any types used in the htn are registered:
+    match htn.verify_operators(&TravelState::default(), &atr) {
+        Ok(_) => {}
+        Err(e) => panic!("Type verification failed: {e:?}"),
+    }
+    match htn.verify_conditions(&TravelState::default(), &atr) {
+        Ok(_) => {}
+        Err(e) => panic!("Condition verification failed: {e:?}"),
+    }
+    match htn.verify_effects(&TravelState::default(), &atr) {
+        Ok(_) => {}
+        Err(e) => panic!("Effect verification failed: {e:?}"),
+    }
+    // assert!(
+    //     htn.verify_operators(&TravelState::default(), &atr).is_ok(),
+    //     "HTN Type verification failed!"
+    // );
     let mut planner = HtnPlanner::new(&htn, &atr);
 
     {
         warn!("Testing walking state");
         let initial_state = TravelState {
             cash: 10,
-            dest_dist: 1,
-            location: Location::Home,
+            distance_to_park: 1,
+            my_location: Location::Home,
             taxi_location: Location::Other,
         };
         let plan = planner.plan(&initial_state);
@@ -325,11 +374,69 @@ fn test_travel_htn() {
         warn!("Testing taxi state");
         let initial_state = TravelState {
             cash: 10,
-            dest_dist: 5,
-            location: Location::Home,
+            distance_to_park: 5,
+            my_location: Location::Home,
             taxi_location: Location::Other,
         };
         let plan = planner.plan(&initial_state);
         assert_eq!(plan.task_names(), vec!["CallTaxi", "RideTaxi", "PayTaxi"]);
+    }
+}
+
+#[test]
+fn test_verify_effects() {
+    {
+        // Don't need app, just want to set up the logger.
+        let mut app = App::new();
+        app.add_plugins(bevy::log::LogPlugin::default());
+    }
+
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
+    #[reflect(Default)]
+    enum Location {
+        #[default]
+        Home,
+        Other,
+        Park,
+    }
+
+    #[derive(Reflect, Resource, Clone, Debug, Default)]
+    #[reflect(Default, Resource)]
+    struct State {
+        energy: i32,
+        happy: bool,
+        location: Location,
+    }
+
+    let src = r#"
+    schema {
+        version: 0.1.0
+    }
+            
+    primitive_task "Walk" {
+        operator: WalkOperator
+        preconditions: [energy > 10, location != Location::Park, happy == false]
+        effects: [
+            location = Location::Park,
+            energy -= 1,
+            happy = true
+        ]
+    }
+    "#;
+    let atr = AppTypeRegistry::default();
+    {
+        let mut atr = atr.write();
+        atr.register::<State>();
+        atr.register::<Location>();
+    }
+    let htn = parse_htn::<State>(src);
+    match htn.verify_effects(&State::default(), &atr) {
+        Ok(_) => {}
+        Err(e) => panic!("Effect verification failed: {e:?}"),
+    }
+    // verify via reflection that any types used in the htn are registered:
+    match htn.verify_operators(&State::default(), &atr) {
+        Ok(_) => {}
+        Err(e) => error!("Type verification failed: {e:?}"),
     }
 }

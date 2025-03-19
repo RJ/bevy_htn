@@ -50,6 +50,22 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
         }
         Ok(())
     }
+
+    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        for task in self.tasks.iter() {
+            info!("Verifying effects for task: {}", task.name());
+            task.verify_effects(state, atr)?;
+        }
+        Ok(())
+    }
+
+    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        for task in self.tasks.iter() {
+            info!("Verifying conditions for task: {}", task.name());
+            task.verify_conditions(state, atr)?;
+        }
+        Ok(())
+    }
 }
 
 pub struct HTNBuilder<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
@@ -104,6 +120,18 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> Task<T> {
         match self {
             Task::Primitive(primitive) => &primitive.name,
             Task::Compound(compound) => &compound.name,
+        }
+    }
+    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        match self {
+            Task::Primitive(primitive) => primitive.verify_effects(state, atr),
+            Task::Compound(compound) => Ok(()), // compound.verify_fields(state, atr)?,
+        }
+    }
+    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        match self {
+            Task::Primitive(primitive) => primitive.verify_conditions(state, atr),
+            Task::Compound(compound) => compound.verify_conditions(state, atr),
         }
     }
 }

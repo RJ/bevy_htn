@@ -10,31 +10,118 @@ pub enum HtnCondition {
         field: String,
         value: bool,
         notted: bool,
+        syntax: String,
     },
     GreaterThanInt {
         field: String,
         threshold: i32,
         orequals: bool,
+        syntax: String,
     },
     LessThanInt {
         field: String,
         threshold: i32,
         orequals: bool,
+        syntax: String,
     },
     EqualsEnum {
         field: String,
         enum_type: String,
         enum_variant: String,
         notted: bool,
+        syntax: String,
     },
     EqualsInt {
         field: String,
         value: i32,
         notted: bool,
+        syntax: String,
     },
+    // EqualsIdentifier to compare two state fields?
 }
 
 impl HtnCondition {
+    fn verify_field_type<FieldType: 'static>(
+        state_struct: &dyn Struct,
+        field: &str,
+        syntax: &str,
+    ) -> Result<(), String> {
+        let Some(val) = state_struct.field(field) else {
+            return Err(format!(
+                "Unknown state field `{field}` for condition `{syntax}`"
+            ));
+        };
+        if val.try_downcast_ref::<FieldType>().is_none() {
+            return Err(format!(
+                "State field `{field}` for condition `{syntax}` is not a {}",
+                std::any::type_name::<FieldType>()
+            ));
+        }
+        Ok(())
+    }
+    pub fn verify_types<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
+        &self,
+        state: &T,
+        atr: &AppTypeRegistry,
+    ) -> Result<(), String> {
+        let reflected = state
+            .reflect_ref()
+            .as_struct()
+            .expect("State is not a struct");
+        match self {
+            HtnCondition::EqualsBool { field, syntax, .. } => {
+                Self::verify_field_type::<bool>(reflected, field, syntax)
+            }
+            HtnCondition::GreaterThanInt { field, syntax, .. } => {
+                Self::verify_field_type::<i32>(reflected, field, syntax)
+            }
+            HtnCondition::LessThanInt { field, syntax, .. } => {
+                Self::verify_field_type::<i32>(reflected, field, syntax)
+            }
+            HtnCondition::EqualsInt { field, syntax, .. } => {
+                Self::verify_field_type::<i32>(reflected, field, syntax)
+            }
+            HtnCondition::EqualsEnum {
+                field,
+                enum_type,
+                enum_variant,
+                syntax,
+                ..
+            } => {
+                if let Some(state_val) = reflected.field(field) {
+                    let dyn_enum = state_val.reflect_ref().as_enum().map_err(|_| {
+                        format!(
+                            "Field `{field}` is expected to be an Enum, in condition: `{syntax}`"
+                        )
+                    })?;
+                    let enum_info = dyn_enum
+                        .get_represented_enum_info()
+                        .expect("Field is not an enum");
+                    let Some(variant) = enum_info.variant(enum_variant) else {
+                        return Err(format!(
+                            "Variant '{enum_type}::{enum_variant}' not found in enum for condition: '{syntax}'"
+                        ));
+                    };
+                    match variant {
+                        VariantInfo::Struct(..) | VariantInfo::Tuple(..) => {
+                            return Err(format!(
+                            "Struct enums and Tuple enums are not supported. condition: `{syntax}`"
+                        ))
+                        }
+                        VariantInfo::Unit(_) => (),
+                    }
+                    if enum_info.type_path_table().ident() != Some(enum_type) {
+                        return Err(format!("Enum type mismatch for condition: `{syntax}`"));
+                    }
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "Unknown state field `{field}` for condition `{syntax}`"
+                    ))
+                }
+            }
+        }
+    }
     pub fn evaluate<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
         &self,
         state: &T,
@@ -49,6 +136,7 @@ impl HtnCondition {
                 field,
                 value,
                 notted,
+                ..
             } => {
                 if let Some(val) = reflected.field(field) {
                     if let Some(b) = val.try_downcast_ref::<bool>() {
@@ -68,6 +156,7 @@ impl HtnCondition {
                 field,
                 threshold,
                 orequals,
+                ..
             } => {
                 if let Some(val) = reflected.field(field) {
                     if let Some(i) = val.try_downcast_ref::<i32>() {
@@ -87,6 +176,7 @@ impl HtnCondition {
                 field,
                 threshold,
                 orequals,
+                ..
             } => {
                 if let Some(val) = reflected.field(field) {
                     if let Some(i) = val.try_downcast_ref::<i32>() {
@@ -106,6 +196,7 @@ impl HtnCondition {
                 field,
                 value,
                 notted,
+                ..
             } => {
                 if let Some(val) = reflected.field(field) {
                     if let Some(i) = val.try_downcast_ref::<i32>() {
@@ -126,6 +217,7 @@ impl HtnCondition {
                 enum_type,
                 enum_variant,
                 notted,
+                ..
             } => {
                 // https://github.com/makspll/bevy_mod_scripting/blob/a4d1ffbcae98f42393ab447d73efe9b0b543426f/crates/bevy_mod_scripting_core/src/bindings/world.rs#L642
                 if let Some(val) = reflected.field(field) {

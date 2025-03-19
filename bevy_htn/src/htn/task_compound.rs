@@ -37,6 +37,14 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> CompoundTask<T>
             })
             .map(|(i, method)| (method, i))
     }
+    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        for method in self.methods.iter() {
+            for cond in method.preconditions.iter() {
+                cond.verify_types(state, atr)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 pub struct CompoundTaskBuilder<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {

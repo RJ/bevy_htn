@@ -8,6 +8,7 @@ use pest_derive::Parser;
 pub struct HtnParser;
 
 fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
+    let syntax = pair.as_str().to_string();
     // 'condition' rule: identifier operator value
     let mut inner = pair.into_inner();
     let field = inner.next().unwrap().as_str().to_string();
@@ -21,6 +22,7 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                 field,
                 threshold,
                 orequals: true,
+                syntax,
             }
         }
         ">" => {
@@ -29,6 +31,7 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                 field,
                 threshold,
                 orequals: false,
+                syntax,
             }
         }
         "<=" => {
@@ -37,6 +40,7 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                 field,
                 threshold,
                 orequals: true,
+                syntax,
             }
         }
         "<" => {
@@ -45,6 +49,7 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                 field,
                 threshold,
                 orequals: false,
+                syntax,
             }
         }
         "==" | "!=" => {
@@ -58,12 +63,14 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                     enum_type,
                     enum_variant,
                     notted,
+                    syntax,
                 }
             } else if let Ok(int_val) = val_str.parse::<i32>() {
                 HtnCondition::EqualsInt {
                     field,
                     value: int_val,
                     notted,
+                    syntax,
                 }
             } else if val_str == "true" || val_str == "false" {
                 let bool_val = match val_str {
@@ -75,6 +82,7 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                     field,
                     value: bool_val,
                     notted,
+                    syntax,
                 }
             } else {
                 panic!("Unsupported operator: {}", op);
@@ -85,6 +93,7 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
 }
 
 fn parse_effect(pair: Pair<Rule>) -> Effect {
+    let syntax = pair.as_str().to_string();
     let inner_pair = pair.into_inner().next().unwrap();
     let rule = inner_pair.as_rule();
     match rule {
@@ -98,11 +107,13 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
                 Effect::SetBool {
                     field,
                     value: bool_val,
+                    syntax,
                 }
             } else if let Ok(int_val) = val_str.parse::<i32>() {
                 Effect::SetInt {
                     field,
                     value: int_val,
+                    syntax,
                 }
             } else if val_str.contains("::") {
                 let parts: Vec<&str> = val_str.split("::").collect();
@@ -112,12 +123,14 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
                     field,
                     enum_type,
                     enum_variant,
+                    syntax,
                 }
             } else {
                 let identifier = val_str.to_string();
                 Effect::SetIdentifier {
                     field,
-                    value: identifier,
+                    field_to_copy_from: identifier,
+                    syntax,
                 }
             }
         }
@@ -129,9 +142,17 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
                 .parse::<i32>()
                 .expect("Invalid integer in inc effect");
             if rule == Rule::dec_effect {
-                Effect::IncrementInt { field, by: -amount }
+                Effect::IncrementInt {
+                    field,
+                    by: -amount,
+                    syntax,
+                }
             } else {
-                Effect::IncrementInt { field, by: amount }
+                Effect::IncrementInt {
+                    field,
+                    by: amount,
+                    syntax,
+                }
             }
         }
         _ => panic!("Unsupported effect type"),

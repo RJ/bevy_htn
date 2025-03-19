@@ -121,6 +121,24 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
         }
     }
 
+    /// Checks any field names used in effects, expected_effects, are present in the state.
+    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        for effect in self.effects.iter() {
+            effect.verify_types(state, atr, false)?;
+        }
+        for effect in self.expected_effects.iter() {
+            effect.verify_types(state, atr, true)?;
+        }
+        Ok(())
+    }
+
+    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        for cond in self.preconditions.iter() {
+            cond.verify_types(state, atr)?;
+        }
+        Ok(())
+    }
+
     /// Checks that every operator has the correct type registry entries and that any fields used
     /// by operators are also present in the state.
     pub fn verify_operator(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
@@ -134,8 +152,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
             ));
         }
         if registration.data::<ReflectHtnOperator>().is_none() {
-            return Err(format!(
-                "ReflectHtnOperator should be registered, did you forget to add #[reflect(HtnOperator)] to {op_type}?"
+            return Err(format!("Operator '{op_type}' is missing Reflection data. Did you forget to derive/implement, AND add #[reflect(HtnOperator)] to {op_type}?"
             ));
         }
         let s = state
