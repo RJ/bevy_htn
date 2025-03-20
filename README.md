@@ -120,6 +120,10 @@ desribe the entity hierarchy and marker components used to host the htn / subtre
 
 Operators are [bevy_behave](https://github.com/RJ/bevy_behave) behaviour trees.
 
+# .htn Capabilities
+
+* ..
+
 ## FAQ
 
 ### How do i set planner goals?
@@ -131,11 +135,6 @@ Design your tasks to elicit the desired state.
 Might be interesting to add a backwards goal-state based planner like goap atop the htn structure, but it would be slow compared to the forwards HTN planning approach, and i want to have loads of NPC entities.
 
 ## TODO
-
-HtpOperator to_tree doesn't need to return an Option if we always use it.
-do we still need the htn trigger alternative? that can provide the planned task id, which is
-maybe useful... but can you just get that by querying the Plan component via ctx.supervisor_entity()?
-maybe we can just insert a context component so behaviours can look it up if needed?
 
 while a plan is running, if gamestate changes, verify all preconditions of current and remaining tasks in the plan still pass,
 and if not, fail the plan.

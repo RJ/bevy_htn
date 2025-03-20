@@ -1,5 +1,6 @@
 use super::*;
 use crate::reflect_operator::*;
+use crate::HtnStateTrait;
 use crate::PlannedTaskId;
 use bevy::{prelude::*, reflect::TypeRegistry};
 use bevy_behave::prelude::*;
@@ -31,7 +32,7 @@ impl Operator {
 }
 
 #[derive(Clone, Debug, Reflect)]
-pub struct PrimitiveTask<T: Reflect> {
+pub struct PrimitiveTask<T: HtnStateTrait> {
     pub name: String,
     pub operator: Operator,
     pub preconditions: Vec<HtnCondition>,
@@ -40,7 +41,7 @@ pub struct PrimitiveTask<T: Reflect> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T> {
+impl<T: HtnStateTrait> PrimitiveTask<T> {
     /// To execute a primitive task is to either:
     /// - insert the operator component into an entity
     /// - trigger an event using the operator struct
@@ -178,7 +179,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
 }
 
 // Create specific builders for each task type
-pub struct PrimitiveTaskBuilder<T: Reflect> {
+pub struct PrimitiveTaskBuilder<T: HtnStateTrait> {
     name: String,
     operator: Option<Operator>,
     preconditions: Vec<HtnCondition>,
@@ -187,7 +188,7 @@ pub struct PrimitiveTaskBuilder<T: Reflect> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect> PrimitiveTaskBuilder<T> {
+impl<T: HtnStateTrait> PrimitiveTaskBuilder<T> {
     pub fn new(name: impl Into<String>) -> Self {
         PrimitiveTaskBuilder {
             name: name.into(),

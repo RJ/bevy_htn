@@ -1,3 +1,5 @@
+use crate::HtnStateTrait;
+
 use super::*;
 use bevy::prelude::*;
 use std::marker::PhantomData;
@@ -11,13 +13,13 @@ pub struct Method<T: Reflect> {
 }
 
 #[derive(Clone, Debug, Reflect)]
-pub struct CompoundTask<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
+pub struct CompoundTask<T: HtnStateTrait> {
     pub name: String,
     pub methods: Vec<Method<T>>,
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> CompoundTask<T> {
+impl<T: HtnStateTrait> CompoundTask<T> {
     /// Finds the first method with passing preconditions, skipping the first `skip` methods.
     pub fn find_method(
         &self,
@@ -47,13 +49,13 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> CompoundTask<T>
     }
 }
 
-pub struct CompoundTaskBuilder<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
+pub struct CompoundTaskBuilder<T: HtnStateTrait> {
     name: String,
     methods: Vec<Method<T>>,
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> CompoundTaskBuilder<T> {
+impl<T: HtnStateTrait> CompoundTaskBuilder<T> {
     pub fn new(name: impl Into<String>) -> Self {
         CompoundTaskBuilder {
             name: name.into(),

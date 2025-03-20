@@ -1,4 +1,4 @@
-use crate::htn::*;
+use crate::{htn::*, HtnStateTrait};
 use bevy::prelude::*;
 use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
@@ -165,7 +165,7 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
     }
 }
 
-fn parse_primitive_task<T: Reflect>(pair: Pair<Rule>) -> PrimitiveTask<T> {
+fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> PrimitiveTask<T> {
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
     let mut builder = PrimitiveTaskBuilder::<T>::new(name);
@@ -225,7 +225,7 @@ fn parse_primitive_task<T: Reflect>(pair: Pair<Rule>) -> PrimitiveTask<T> {
     builder.build()
 }
 
-fn parse_method<T: Reflect>(pair: Pair<Rule>) -> Method<T> {
+fn parse_method<T: HtnStateTrait>(pair: Pair<Rule>) -> Method<T> {
     let mut builder = MethodBuilder::<T>::new();
     let mut inner = pair.into_inner().peekable();
 
@@ -267,9 +267,7 @@ fn parse_method<T: Reflect>(pair: Pair<Rule>) -> Method<T> {
     builder.build()
 }
 
-fn parse_compound_task<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
-    pair: Pair<Rule>,
-) -> CompoundTask<T> {
+fn parse_compound_task<T: HtnStateTrait>(pair: Pair<Rule>) -> CompoundTask<T> {
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
     let mut builder = CompoundTaskBuilder::<T>::new(name);
@@ -304,9 +302,7 @@ fn parse_schema(pair: Pair<Rule>) -> HtnSchema {
 }
 
 // TODO error handling. return Result..
-pub fn parse_htn<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
-    input: &str,
-) -> HTN<T> {
+pub fn parse_htn<T: HtnStateTrait>(input: &str) -> HTN<T> {
     let pairs = HtnParser::parse(Rule::domain, input).expect("Failed to parse DSL");
     let mut htn_builder = HTN::<T>::builder();
 

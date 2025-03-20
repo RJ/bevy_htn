@@ -1,15 +1,13 @@
-use crate::prelude::*;
+use crate::{prelude::*, HtnStateTrait};
 use bevy::prelude::*;
 use bevy_behave::prelude::*;
 use std::marker::PhantomData;
 
-pub struct HtnExecutorPlugin<T: Reflect + Component + TypePath> {
+pub struct HtnExecutorPlugin<T: HtnStateTrait> {
     phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug> Default
-    for HtnExecutorPlugin<T>
-{
+impl<T: HtnStateTrait> Default for HtnExecutorPlugin<T> {
     fn default() -> Self {
         Self {
             phantom: PhantomData,
@@ -17,9 +15,7 @@ impl<T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug> Def
     }
 }
 
-impl<T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug> Plugin
-    for HtnExecutorPlugin<T>
-{
+impl<T: HtnStateTrait> Plugin for HtnExecutorPlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (task_finished, when_to_replan_system::<T>));
         app.add_observer(on_exec_next_task::<T>);
@@ -47,7 +43,7 @@ pub struct ReplanRequest;
 /// This entity is the parent of the HTN operator entities.
 /// It holds the HTN asset and the current plan, and is a direct child of the troll.
 #[derive(Component, Reflect)]
-pub struct HtnSupervisor<T: Reflect + TypePath + Default + Clone + core::fmt::Debug> {
+pub struct HtnSupervisor<T: HtnStateTrait> {
     pub htn_handle: Handle<HtnAsset<T>>,
 }
 
@@ -75,7 +71,7 @@ pub struct HtnSupervisor<T: Reflect + TypePath + Default + Clone + core::fmt::De
 // }
 
 // do we need to replan? is the current plan still valid?
-fn when_to_replan_system<T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug>(
+fn when_to_replan_system<T: HtnStateTrait>(
     mut q: Query<(Entity, &HtnSupervisor<T>, &T, &mut Plan), Or<(Added<T>, Changed<T>)>>,
     mut commands: Commands,
     assets: Res<Assets<HtnAsset<T>>>,
@@ -122,7 +118,7 @@ fn when_to_replan_system<T: Reflect + Component + TypePath + Default + Clone + c
     }
 }
 
-fn on_replan_request<T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug>(
+fn on_replan_request<T: HtnStateTrait>(
     t: Trigger<ReplanRequest>,
     assets: Res<Assets<HtnAsset<T>>>,
     q: Query<(&HtnSupervisor<T>, &Parent, &T, Option<&Plan>)>,
@@ -177,7 +173,7 @@ fn on_plan_added(t: Trigger<OnInsert, Plan>, mut commands: Commands) {
     commands.trigger_targets(ExecNextTask, t.entity());
 }
 
-fn on_task_complete<T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug>(
+fn on_task_complete<T: HtnStateTrait>(
     t: Trigger<TaskComplete>,
     mut q: Query<(&mut Plan, &HtnSupervisor<T>, &mut T)>,
     assets: Res<Assets<HtnAsset<T>>>,
@@ -230,7 +226,7 @@ fn on_task_complete<T: Reflect + Component + TypePath + Default + Clone + core::
     }
 }
 
-fn on_exec_next_task<T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug>(
+fn on_exec_next_task<T: HtnStateTrait>(
     t: Trigger<ExecNextTask>,
     mut q: Query<(Option<&Children>, &Parent, &HtnSupervisor<T>, &mut Plan, &T)>,
     q_children: Query<Entity, With<PlannedTaskId>>,

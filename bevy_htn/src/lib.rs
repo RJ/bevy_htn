@@ -7,6 +7,17 @@ mod reflect_operator;
 #[cfg(test)]
 mod tests;
 
+/// Auto-implemented trait that HTN Planner state must abide by. Used as a trait alias.
+pub trait HtnStateTrait:
+    Reflect + GetTypeRegistration + Default + TypePath + Clone + core::fmt::Debug + Component
+{
+}
+impl<
+        T: Reflect + GetTypeRegistration + Default + TypePath + Clone + core::fmt::Debug + Component,
+    > HtnStateTrait for T
+{
+}
+
 pub mod prelude {
     pub use super::dsl::*;
     pub use super::executor::*;
@@ -25,11 +36,11 @@ use bevy_behave::prelude::BehavePlugin;
 use prelude::*;
 use std::marker::PhantomData;
 
-pub struct HtnPlugin<T: Reflect + Component + TypePath> {
+pub struct HtnPlugin<T: HtnStateTrait> {
     phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + Component + TypePath> Default for HtnPlugin<T> {
+impl<T: HtnStateTrait> Default for HtnPlugin<T> {
     fn default() -> Self {
         Self {
             phantom: PhantomData,
@@ -37,10 +48,7 @@ impl<T: Reflect + Component + TypePath> Default for HtnPlugin<T> {
     }
 }
 
-impl<
-        T: Reflect + Component + TypePath + Default + Clone + core::fmt::Debug + GetTypeRegistration,
-    > Plugin for HtnPlugin<T>
-{
+impl<T: HtnStateTrait> Plugin for HtnPlugin<T> {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<BehavePlugin>() {
             app.add_plugins(BehavePlugin::new(Update));

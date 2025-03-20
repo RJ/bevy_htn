@@ -1,5 +1,7 @@
 use std::any::{Any, TypeId};
 
+use crate::HtnStateTrait;
+
 use super::*;
 use bevy::{
     prelude::*,
@@ -47,7 +49,7 @@ impl Effect {
             Effect::SetEnum { syntax, .. } => syntax,
         }
     }
-    pub fn verify_types<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
+    pub fn verify_types<T: HtnStateTrait>(
         &self,
         state: &T,
         atr: &AppTypeRegistry,
@@ -145,11 +147,7 @@ impl Effect {
         }
         Ok(())
     }
-    pub fn apply<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
-        &self,
-        state: &mut T,
-        atr: &AppTypeRegistry,
-    ) {
+    pub fn apply<T: HtnStateTrait>(&self, state: &mut T, atr: &AppTypeRegistry) {
         let reflected = state
             .reflect_mut()
             .as_struct()
@@ -184,11 +182,11 @@ impl Effect {
             }
             Effect::SetIdentifier {
                 field,
-                field_source: value,
+                field_source,
                 ..
             } => {
-                let Some(newval) = reflected.field(value) else {
-                    panic!("Field {value} does not exist in the state");
+                let Some(newval) = reflected.field(field_source) else {
+                    panic!("Field {field_source} does not exist in the state");
                 };
                 let newval = newval.clone_value();
                 let val = reflected.field_mut(field).unwrap();

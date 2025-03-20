@@ -18,7 +18,7 @@ enum Location {
     Work,
 }
 
-#[derive(Reflect, Resource, Clone, Debug)]
+#[derive(Reflect, Resource, Clone, Debug, Component)]
 #[reflect(Default, Resource)]
 struct TestState {
     tog: bool,
@@ -209,6 +209,12 @@ fn test_parser() {
                 notted: false,
                 syntax: "location == Location::Home".to_string(),
             },
+            HtnCondition::EqualsIdentifier {
+                field: "e1".to_string(),
+                other_field: "e2".to_string(),
+                notted: false,
+                syntax: "e1 == e2".to_string(),
+            },
         ]
     );
     assert_eq!(
@@ -309,7 +315,7 @@ fn test_travel_htn() {
         Park,
     }
 
-    #[derive(Reflect, Resource, Clone, Debug, Default)]
+    #[derive(Reflect, Resource, Clone, Debug, Default, Component)]
     #[reflect(Default, Resource)]
     struct TravelState {
         cash: i32,
@@ -440,7 +446,7 @@ fn test_verify_effects() {
         Park,
     }
 
-    #[derive(Reflect, Resource, Clone, Debug, Default)]
+    #[derive(Reflect, Resource, Clone, Debug, Default, Component)]
     #[reflect(Default, Resource)]
     struct State {
         energy: i32,

@@ -1,4 +1,4 @@
-use crate::dsl::parse_htn;
+use crate::{dsl::parse_htn, HtnStateTrait};
 
 use super::*;
 use bevy::prelude::*;
@@ -10,12 +10,12 @@ pub struct HtnSchema {
 
 /// This is the HTN domain - a list of all the compound and primitive tasks.
 #[derive(Debug, Reflect, Clone)]
-pub struct HTN<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
+pub struct HTN<T: HtnStateTrait> {
     pub tasks: Vec<Task<T>>,
     pub schema: HtnSchema,
 }
 
-impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
+impl<T: HtnStateTrait> HTN<T> {
     pub fn builder() -> HTNBuilder<T> {
         HTNBuilder {
             tasks: Vec::new(),
@@ -90,12 +90,12 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
     }
 }
 
-pub struct HTNBuilder<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
+pub struct HTNBuilder<T: HtnStateTrait> {
     tasks: Vec<Task<T>>,
     schema: HtnSchema,
 }
 
-impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
+impl<T: HtnStateTrait> HTNBuilder<T> {
     pub fn primitive_task(mut self, task: PrimitiveTask<T>) -> Self {
         self.tasks.push(Task::Primitive(task));
         self
@@ -132,12 +132,12 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTNBuilder<T> {
 }
 
 #[derive(Clone, Debug, Reflect)]
-pub enum Task<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
+pub enum Task<T: HtnStateTrait> {
     Primitive(PrimitiveTask<T>),
     Compound(CompoundTask<T>),
 }
 
-impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> Task<T> {
+impl<T: HtnStateTrait> Task<T> {
     pub fn name(&self) -> &str {
         match self {
             Task::Primitive(primitive) => &primitive.name,

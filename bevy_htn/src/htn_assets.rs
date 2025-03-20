@@ -1,5 +1,6 @@
 use crate::dsl::parse_htn;
 use crate::htn::HTN;
+use crate::HtnStateTrait;
 use bevy::asset::{io::Reader, AssetLoader, LoadContext};
 use bevy::prelude::*;
 use futures_lite::AsyncReadExt;
@@ -7,11 +8,11 @@ use std::marker::PhantomData;
 use thiserror::Error;
 
 #[derive(Default)]
-struct HtnAssetLoader<T: Reflect + TypePath + Default> {
+struct HtnAssetLoader<T: HtnStateTrait> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + TypePath + Default + Clone + core::fmt::Debug> AssetLoader for HtnAssetLoader<T> {
+impl<T: HtnStateTrait> AssetLoader for HtnAssetLoader<T> {
     type Asset = HtnAsset<T>;
     type Settings = ();
     type Error = HtnAssetError;
@@ -36,7 +37,7 @@ impl<T: Reflect + TypePath + Default + Clone + core::fmt::Debug> AssetLoader for
 }
 
 #[derive(Asset, TypePath)]
-pub struct HtnAsset<T: Reflect + TypePath + Default + Clone + core::fmt::Debug> {
+pub struct HtnAsset<T: HtnStateTrait> {
     pub htn: HTN<T>,
 }
 
@@ -49,11 +50,11 @@ pub enum HtnAssetError {
 }
 
 #[derive(Default)]
-pub struct HtnAssetPlugin<T: Reflect + TypePath + Default> {
+pub struct HtnAssetPlugin<T: HtnStateTrait> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: Reflect + TypePath + Default + Clone + core::fmt::Debug> Plugin for HtnAssetPlugin<T> {
+impl<T: HtnStateTrait> Plugin for HtnAssetPlugin<T> {
     fn build(&self, app: &mut App) {
         app.init_asset_loader::<HtnAssetLoader<T>>();
         app.init_asset::<HtnAsset<T>>();

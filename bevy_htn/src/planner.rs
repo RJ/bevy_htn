@@ -1,4 +1,4 @@
-use crate::htn::*;
+use crate::{htn::*, HtnStateTrait};
 use bevy::prelude::*;
 use rand::Rng;
 use std::collections::VecDeque;
@@ -204,7 +204,7 @@ struct DecompositionState {
     mtr: Vec<usize>,
 }
 
-pub struct HtnPlanner<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> {
+pub struct HtnPlanner<'a, T: HtnStateTrait> {
     htn: &'a HTN<T>,
     task_stack: VecDeque<String>,
     decomp_stack: Vec<DecompositionState>,
@@ -213,7 +213,7 @@ pub struct HtnPlanner<'a, T: Reflect + Default + TypePath + Clone + core::fmt::D
     mtr: Vec<usize>,
 }
 
-impl<'a, T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HtnPlanner<'a, T> {
+impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
     pub fn new(htn: &'a HTN<T>, atr: &'a AppTypeRegistry) -> Self {
         Self {
             task_stack: VecDeque::new(),

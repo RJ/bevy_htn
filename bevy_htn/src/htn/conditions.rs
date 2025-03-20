@@ -1,5 +1,7 @@
 use std::any::Any;
 
+use crate::HtnStateTrait;
+
 use super::*;
 use bevy::{
     prelude::*,
@@ -66,7 +68,7 @@ impl HtnCondition {
         }
         Ok(())
     }
-    pub fn verify_types<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
+    pub fn verify_types<T: HtnStateTrait>(
         &self,
         state: &T,
         atr: &AppTypeRegistry,
@@ -157,11 +159,7 @@ impl HtnCondition {
             }
         }
     }
-    pub fn evaluate<T: Reflect + Default + TypePath + Clone + core::fmt::Debug>(
-        &self,
-        state: &T,
-        atr: &AppTypeRegistry,
-    ) -> bool {
+    pub fn evaluate<T: HtnStateTrait>(&self, state: &T, atr: &AppTypeRegistry) -> bool {
         let reflected = state
             .reflect_ref()
             .as_struct()
