@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use super::*;
 use bevy::{
     prelude::*,
@@ -37,7 +39,12 @@ pub enum HtnCondition {
         notted: bool,
         syntax: String,
     },
-    // EqualsIdentifier to compare two state fields?
+    EqualsIdentifier {
+        field: String,
+        other_field: String,
+        notted: bool,
+        syntax: String,
+    },
 }
 
 impl HtnCondition {
@@ -119,6 +126,34 @@ impl HtnCondition {
                         "Unknown state field `{field}` for condition `{syntax}`"
                     ))
                 }
+            }
+            HtnCondition::EqualsIdentifier {
+                field: field1,
+                other_field: field2,
+                syntax,
+                ..
+            } => {
+                let Some(val1) = reflected.field(field1) else {
+                    return Err(format!(
+                        "Unknown state field `{field1}` for condition `{syntax}`"
+                    ));
+                };
+                let Some(val2) = reflected.field(field2) else {
+                    return Err(format!(
+                        "Unknown state field `{field2}` for condition `{syntax}`"
+                    ));
+                };
+
+                // reflected fields known to exist due to above code, so unwrap:
+                let val1_type = val1.get_represented_type_info().unwrap().type_id();
+                let val2_type = val2.get_represented_type_info().unwrap().type_id();
+
+                if val1_type != val2_type {
+                    return Err(format!(
+                        "Fields `{field1}` and `{field2}` are not of the same type for condition `{syntax}`"
+                    ));
+                }
+                Ok(())
             }
         }
     }
@@ -241,6 +276,18 @@ impl HtnCondition {
                     } else {
                         dynamic.reflect_partial_eq(val).unwrap()
                     }
+                } else {
+                    false
+                }
+            }
+            HtnCondition::EqualsIdentifier {
+                field: field1,
+                other_field: field2,
+                ..
+            } => {
+                if let (Some(val1), Some(val2)) = (reflected.field(field1), reflected.field(field2))
+                {
+                    val1.reflect_partial_eq(val2).unwrap_or(false)
                 } else {
                     false
                 }

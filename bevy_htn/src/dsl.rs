@@ -85,7 +85,13 @@ fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
                     syntax,
                 }
             } else {
-                panic!("Unsupported operator: {}", op);
+                // comparing two identifiers
+                HtnCondition::EqualsIdentifier {
+                    field,
+                    other_field: val_str.to_string(),
+                    notted,
+                    syntax,
+                }
             }
         }
         _ => panic!("Unsupported operator: {}", op),
@@ -129,7 +135,7 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
                 let identifier = val_str.to_string();
                 Effect::SetIdentifier {
                     field,
-                    field_to_copy_from: identifier,
+                    field_source: identifier,
                     syntax,
                 }
             }

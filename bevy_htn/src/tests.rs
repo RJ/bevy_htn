@@ -18,12 +18,26 @@ enum Location {
     Work,
 }
 
-#[derive(Reflect, Resource, Clone, Debug, Default)]
+#[derive(Reflect, Resource, Clone, Debug)]
 #[reflect(Default, Resource)]
 struct TestState {
     tog: bool,
     location: Location,
     counter: i32,
+    e1: Entity,
+    e2: Entity,
+}
+
+impl Default for TestState {
+    fn default() -> Self {
+        Self {
+            tog: false,
+            location: Location::Home,
+            counter: 0,
+            e1: Entity::PLACEHOLDER,
+            e2: Entity::PLACEHOLDER,
+        }
+    }
 }
 
 #[derive(Debug, Reflect, Default, Clone, HtnOperator)]
@@ -124,13 +138,13 @@ fn test_parser() {
     primitive_task "TestTask1" {
         // comment
         operator: TestOperator1
-        preconditions: [tog == false, location == Location::Home]
+        preconditions: [tog == false, location == Location::Home, e1 == e2]
         effects: [
             tog = true,
             // comment
             counter -= 1,
         ]
-        expected_effects: [location = Location::Work]
+        expected_effects: [location = Location::Work, e1 = e2]
     }
     // comment
     compound_task "CompoundTask1" {
@@ -165,12 +179,19 @@ fn test_parser() {
     assert_eq!(task1.name, "TestTask1");
     assert_eq!(
         task1.expected_effects,
-        vec![Effect::SetEnum {
-            field: "location".to_string(),
-            enum_type: "Location".into(),
-            enum_variant: "Work".into(),
-            syntax: "location = Location::Work".to_string(),
-        }]
+        vec![
+            Effect::SetEnum {
+                field: "location".to_string(),
+                enum_type: "Location".into(),
+                enum_variant: "Work".into(),
+                syntax: "location = Location::Work".to_string(),
+            },
+            Effect::SetIdentifier {
+                field: "e1".to_string(),
+                field_source: "e2".to_string(),
+                syntax: "e1 = e2".to_string(),
+            },
+        ]
     );
     assert_eq!(
         task1.preconditions,

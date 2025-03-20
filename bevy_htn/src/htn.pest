@@ -26,7 +26,7 @@ operator_def       =  { identifier ~ ("(" ~ operator_param* ~ ")")? }
 operator_param     = @{ identifier }
 
 
-condition  = { identifier ~ operator ~ (value | enum_value) }
+condition  = { identifier ~ operator ~ (value | enum_value | identifier) }
 operator   = { ">=" | ">" | "<=" | "<" | "==" | "!=" }
 effect     = { set_effect | inc_effect | dec_effect }
 // greedy parser, so check for enum_value first otherwise identifier is found before the ::

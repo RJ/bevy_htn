@@ -18,10 +18,10 @@ pub enum Effect {
         value: i32,
         syntax: String,
     },
-    // sets field to the value of field_to_copy_from
+    // sets state.field to the value of state.field_source, so long as they are equal types.
     SetIdentifier {
         field: String,
-        field_to_copy_from: String,
+        field_source: String,
         syntax: String,
     },
     IncrementInt {
@@ -80,7 +80,7 @@ impl Effect {
             // set a field to the value of another field
             Effect::SetIdentifier {
                 field,
-                field_to_copy_from,
+                field_source,
                 syntax,
                 ..
             } => {
@@ -89,14 +89,18 @@ impl Effect {
                         "Unknown state field `{field}` for {effect_noun} `{syntax}`"
                     ));
                 };
-                let Some(field_to_copy_from_val) = reflected.field(field_to_copy_from) else {
+                let Some(field_src_val) = reflected.field(field_source) else {
                     return Err(format!(
-                        "Unknown state field `{field_to_copy_from}` for {effect_noun} `{syntax}`"
+                        "Unknown state field `{field_source}` for {effect_noun} `{syntax}`"
                     ));
                 };
-                if field_val.type_id() != field_to_copy_from_val.type_id() {
+                // reflected fields known to exist due to above code, so unwrap:
+                let field_type = field_val.get_represented_type_info().unwrap().type_id();
+                let field_src_type = field_src_val.get_represented_type_info().unwrap().type_id();
+
+                if field_type != field_src_type {
                     return Err(format!(
-                        "An {effect_noun} is trying to set '{field}' to '{field_to_copy_from}' but they are different types"
+                        "An {effect_noun} is trying to set '{field}' to '{field_source}' but they are different types"
                     ));
                 }
             }
@@ -180,7 +184,7 @@ impl Effect {
             }
             Effect::SetIdentifier {
                 field,
-                field_to_copy_from: value,
+                field_source: value,
                 ..
             } => {
                 let Some(newval) = reflected.field(value) else {
