@@ -97,9 +97,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
             .data::<ReflectHtnOperator>()
             .expect("`ReflectHtnOperator` should be registered");
 
-        let tree = reflect_op
-            .to_tree(boxed_reflect.as_reflect())
-            .expect("Must return a tree?");
+        let tree = reflect_op.to_tree(boxed_reflect.as_reflect());
 
         TaskExecutionStrategy::BehaviourTree {
             tree,

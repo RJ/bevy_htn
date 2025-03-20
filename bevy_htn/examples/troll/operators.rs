@@ -31,10 +31,10 @@ impl Default for WaitOperator {
 
 // if you remove the HtnOperator Derive (and spawn_named) you can manually provide a tree:
 impl HtnOperator for WaitOperator {
-    fn to_tree(&self) -> Option<Tree<Behave>> {
-        Some(behave! {
+    fn to_tree(&self) -> Tree<Behave> {
+        behave! {
             Behave::Wait(self.0)
-        })
+        }
     }
 }
 

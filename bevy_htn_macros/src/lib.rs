@@ -45,10 +45,10 @@ pub fn derive_htn_operator(input: TokenStream) -> TokenStream {
     };
     let expanded = quote! {
         impl HtnOperator for #name {
-            fn to_tree(&self) -> Option<Tree<Behave>> {
-                Some(behave! {
+            fn to_tree(&self) -> Tree<Behave> {
+                behave! {
                     #tree_impl
-                })
+                }
             }
         }
     };

@@ -287,8 +287,8 @@ fn test_travel_htn() {
     #[reflect(Default, HtnOperator)]
     struct RideTaxiOperator(i32);
     impl HtnOperator for RideTaxiOperator {
-        fn to_tree(&self) -> Option<Tree<Behave>> {
-            Some(behave! { Behave::Wait(self.0 as f32) })
+        fn to_tree(&self) -> Tree<Behave> {
+            behave! { Behave::Wait(self.0 as f32) }
         }
     }
 
@@ -355,13 +355,13 @@ fn test_travel_htn() {
 
     primitive_task "CallTaxi" {
         operator: TaxiOperator
-        preconditions: [taxi_location != Location::Park, cash >= 1]
-        effects: [taxi_location = Location::Home]
+        preconditions: [cash >= 1]
+        effects: [taxi_location = my_location]
     }
 
     primitive_task "RideTaxi" {
         operator: RideTaxiOperator(distance_to_park)
-        preconditions: [taxi_location == Location::Home, cash >= 1]
+        preconditions: [taxi_location == my_location, cash >= 1]
         effects: [taxi_location = Location::Park, my_location = Location::Park, happy = true]
     }
 

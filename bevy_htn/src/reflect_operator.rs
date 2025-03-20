@@ -5,7 +5,7 @@ use bevy_behave::prelude::*;
 pub trait HtnOperator: Reflect + Default + Clone + std::fmt::Debug {
     /// If this returns a Some(tree), the operator will spawn a behaviour tree.
     /// If it returns None, the operator will emit a trigger: `HtnTaskExecute<Operator>`
-    fn to_tree(&self) -> Option<Tree<Behave>>;
+    fn to_tree(&self) -> Tree<Behave>;
 }
 
 /// A struct used to operate on reflected [`HtnOperator`] of a type.
@@ -22,7 +22,7 @@ pub struct ReflectHtnOperator(ReflectHtnOperatorFns);
 #[derive(Clone)]
 pub struct ReflectHtnOperatorFns {
     /// Function pointer implementing [`ReflectHtnOperator::trigger()`].
-    pub to_tree: fn(&dyn Reflect) -> Option<Tree<Behave>>,
+    pub to_tree: fn(&dyn Reflect) -> Tree<Behave>,
 }
 
 impl ReflectHtnOperatorFns {
@@ -37,7 +37,7 @@ impl ReflectHtnOperatorFns {
 }
 
 impl ReflectHtnOperator {
-    pub fn to_tree(&self, event: &dyn Reflect) -> Option<Tree<Behave>> {
+    pub fn to_tree(&self, event: &dyn Reflect) -> Tree<Behave> {
         (self.0.to_tree)(event)
     }
 
@@ -55,7 +55,7 @@ impl ReflectHtnOperator {
 impl<E: HtnOperator + Reflect> FromType<E> for ReflectHtnOperator {
     fn from_type() -> Self {
         ReflectHtnOperator(ReflectHtnOperatorFns {
-            to_tree: |op| -> Option<Tree<Behave>> {
+            to_tree: |op| -> Tree<Behave> {
                 let Some(ev) = op.downcast_ref::<E>() else {
                     panic!("Event is not of type {}", std::any::type_name::<E>());
                 };
