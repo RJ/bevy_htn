@@ -1,3 +1,5 @@
+use crate::dsl::parse_htn;
+
 use super::*;
 use bevy::prelude::*;
 
@@ -37,6 +39,26 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> HTN<T> {
     /// Returns the first (compound) task in the HTN.
     pub fn root_task(&self) -> &Task<T> {
         self.tasks.first().expect("No root task found")
+    }
+
+    /// Verifies that every rust type used in the HTN is registered in the type registry, to
+    /// avoid any runtime errors executing the HTN.
+    ///
+    /// Call this after parsing the HTN before trying to use it.
+    pub fn verify_all(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        self.verify_conditions(state, atr)?;
+        self.verify_effects(state, atr)?;
+        self.verify_operators(state, atr)?;
+        Ok(())
+    }
+
+    /// Verifies that every rust type used in the HTN in reference to the state type is registered.
+    /// Doesn't check that operators are registered.
+    /// Used in tests that check the planner output without actually running the HTNs.
+    pub fn verify_without_operators(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+        self.verify_conditions(state, atr)?;
+        self.verify_effects(state, atr)?;
+        Ok(())
     }
 
     /// Verifies that every operator has the correct type registry entries and that any fields used

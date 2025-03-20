@@ -242,12 +242,43 @@ fn test_parser() {
 #[test]
 fn test_travel_htn() {
     {
-        // Don't need app, just want to set up the logger.
+        // Don't need app for test, just want to set up the logger.
         let mut app = App::new();
         app.add_plugins(bevy::log::LogPlugin::default());
     }
 
-    info!("Test travel HTN");
+    // DEFINE OPERATORS (which are behaviour trees)
+
+    // the default behaviour of operators is to be emitted as triggers,
+    // ie. Behave::trigger(WalkOperator)
+    // but you can also make them components to be spawned, or implement HtnOperator
+    // yourself to provide a custom behaviour tree.
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
+    #[reflect(Default, HtnOperator)]
+    struct WalkOperator;
+
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
+    #[reflect(Default, HtnOperator)]
+    struct TaxiOperator;
+
+    // an operator that returns a custom behaviour tree.
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
+    #[reflect(Default, HtnOperator)]
+    struct RideTaxiOperator(i32);
+    impl HtnOperator for RideTaxiOperator {
+        fn to_tree(&self) -> Option<Tree<Behave>> {
+            Some(behave! { Behave::Wait(self.0 as f32) })
+        }
+    }
+
+    // this one would get spawned into an entity using Behave::spawn_named.
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator, Component)]
+    #[reflect(Default, HtnOperator)]
+    #[spawn_named = "Paying the taxi!"]
+    struct PayTaxiOperator;
+
+    // DEFINE PLANNER STATE
+
     #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
     #[reflect(Default)]
     enum Location {
@@ -257,31 +288,21 @@ fn test_travel_htn() {
         Park,
     }
 
-    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
-    #[reflect(Default, HtnOperator)]
-    struct WalkOperator;
-
-    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
-    #[reflect(Default, HtnOperator)]
-    struct TaxiOperator;
-
-    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
-    #[reflect(Default, HtnOperator)]
-    struct RideTaxiOperator;
-
-    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
-    #[reflect(Default, HtnOperator)]
-    struct PayTaxiOperator;
-
     #[derive(Reflect, Resource, Clone, Debug, Default)]
     #[reflect(Default, Resource)]
     struct TravelState {
         cash: i32,
         distance_to_park: i32,
+        happy: bool,
         my_location: Location,
         taxi_location: Location,
     }
 
+    // DEFINE HTN (can be loaded from an .htn file by asset loader too)
+
+    // for an initial state with distance > 4 this will cause the planner to try the first
+    // TravelToPark method, then backtrack when the precondition for Walk is not met,
+    // then try the second method, which succeeds (get a taxi).
     let src = r#"
     schema {
         version: 0.1.0
@@ -298,9 +319,10 @@ fn test_travel_htn() {
             
     primitive_task "Walk" {
         operator: WalkOperator
-        preconditions: [distance_to_park <= 4, my_location != Location::Park]
+        preconditions: [distance_to_park <= 4, my_location != Location::Park, happy == false]
         effects: [
             my_location = Location::Park,
+            happy = true,
         ]
     }
 
@@ -317,9 +339,9 @@ fn test_travel_htn() {
     }
 
     primitive_task "RideTaxi" {
-        operator: RideTaxiOperator
+        operator: RideTaxiOperator(distance_to_park)
         preconditions: [taxi_location == Location::Home, cash >= 1]
-        effects: [taxi_location = Location::Park, my_location = Location::Park]
+        effects: [taxi_location = Location::Park, my_location = Location::Park, happy = true]
     }
 
     primitive_task "PayTaxi" {
@@ -328,6 +350,10 @@ fn test_travel_htn() {
         effects: [cash -= 1]
     }
     "#;
+
+    // REGISTER TYPES USED IN HTN
+
+    // normally you'd use app.register_type or Res<AppTypeRegistry>
     let atr = AppTypeRegistry::default();
     {
         let mut atr = atr.write();
@@ -339,25 +365,16 @@ fn test_travel_htn() {
         atr.register::<PayTaxiOperator>();
     }
     let htn = parse_htn::<TravelState>(src);
+
     // verify via reflection that any types used in the htn are registered:
-    match htn.verify_operators(&TravelState::default(), &atr) {
+    match htn.verify_all(&TravelState::default(), &atr) {
         Ok(_) => {}
-        Err(e) => panic!("Type verification failed: {e:?}"),
+        Err(e) => panic!("HTN type verification failed: {e:?}"),
     }
-    match htn.verify_conditions(&TravelState::default(), &atr) {
-        Ok(_) => {}
-        Err(e) => panic!("Condition verification failed: {e:?}"),
-    }
-    match htn.verify_effects(&TravelState::default(), &atr) {
-        Ok(_) => {}
-        Err(e) => panic!("Effect verification failed: {e:?}"),
-    }
-    // assert!(
-    //     htn.verify_operators(&TravelState::default(), &atr).is_ok(),
-    //     "HTN Type verification failed!"
-    // );
+
     let mut planner = HtnPlanner::new(&htn, &atr);
 
+    // Run the planner with alternative starting states to see different outcomes:
     {
         warn!("Testing walking state");
         let initial_state = TravelState {
@@ -365,6 +382,7 @@ fn test_travel_htn() {
             distance_to_park: 1,
             my_location: Location::Home,
             taxi_location: Location::Other,
+            happy: false,
         };
         let plan = planner.plan(&initial_state);
         assert_eq!(plan.task_names(), vec!["Walk"]);
@@ -377,6 +395,7 @@ fn test_travel_htn() {
             distance_to_park: 5,
             my_location: Location::Home,
             taxi_location: Location::Other,
+            happy: false,
         };
         let plan = planner.plan(&initial_state);
         assert_eq!(plan.task_names(), vec!["CallTaxi", "RideTaxi", "PayTaxi"]);

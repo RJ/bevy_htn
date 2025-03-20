@@ -143,6 +143,7 @@ impl<T: Reflect + Default + TypePath + Clone + core::fmt::Debug> PrimitiveTask<T
     /// by operators are also present in the state.
     pub fn verify_operator(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
         let op_type = self.operator.name();
+        info!("Verifying operator: {op_type}");
         let Some(registration) = atr.get_type_by_name(op_type) else {
             return Err(format!("No type registry entry for operator '{op_type}'"));
         };
