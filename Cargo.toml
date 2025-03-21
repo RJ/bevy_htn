@@ -29,7 +29,7 @@ debug = false
 
 [workspace.dependencies]
 bevy_htn_macros = {path = "bevy_htn_macros"}
-bevy = {version = "0.15", default-features = false, features = ["bevy_asset"]}
+bevy = {version = "0.15", default-features = false, features = ["bevy_asset", "file_watcher"]}
 futures-lite = "2.6.0"
 pest = "2.7.15"
 pest_derive = "2.7.15"

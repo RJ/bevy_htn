@@ -50,6 +50,16 @@ pub enum HtnCondition {
 }
 
 impl HtnCondition {
+    pub fn syntax(&self) -> String {
+        match self {
+            HtnCondition::EqualsBool { syntax, .. } => syntax.clone(),
+            HtnCondition::GreaterThanInt { syntax, .. } => syntax.clone(),
+            HtnCondition::LessThanInt { syntax, .. } => syntax.clone(),
+            HtnCondition::EqualsEnum { syntax, .. } => syntax.clone(),
+            HtnCondition::EqualsInt { syntax, .. } => syntax.clone(),
+            HtnCondition::EqualsIdentifier { syntax, .. } => syntax.clone(),
+        }
+    }
     fn verify_field_type<FieldType: 'static>(
         state_struct: &dyn Struct,
         field: &str,

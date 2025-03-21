@@ -20,6 +20,7 @@ fn navigate_to_system(
         let dist_threshold = 40.0;
         let dist = troll_transform.translation.xy().distance(navigate_to.0);
         if dist < dist_threshold {
+            info!("Troll reached destination {ctx:?}");
             commands.trigger(ctx.success());
             continue;
         }

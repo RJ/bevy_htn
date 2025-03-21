@@ -40,8 +40,9 @@ fn check_asset_loaded(
     mut next_state: ResMut<NextState<LoadingState>>,
 ) {
     for ev in ev_asset.read() {
+        info!("HTN asset event: {:?}", ev);
         if let AssetEvent::LoadedWithDependencies { .. } = ev {
-            info!("HTN asset loaded: ");
+            // info!("HTN asset loaded: ");
             next_state.set(LoadingState::SpawningEntities);
             break;
         }

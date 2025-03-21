@@ -4,6 +4,7 @@ use crate::HtnStateTrait;
 use bevy::asset::{io::Reader, AssetLoader, LoadContext};
 use bevy::prelude::*;
 use futures_lite::AsyncReadExt;
+use rand::Rng;
 use std::marker::PhantomData;
 use thiserror::Error;
 
@@ -28,6 +29,7 @@ impl<T: HtnStateTrait> AssetLoader for HtnAssetLoader<T> {
         // info!("Loaded htn: {}", value);
         Ok(HtnAsset {
             htn: parse_htn::<T>(&value),
+            seed: rand::rng().random(),
         })
     }
 
@@ -39,6 +41,7 @@ impl<T: HtnStateTrait> AssetLoader for HtnAssetLoader<T> {
 #[derive(Asset, TypePath)]
 pub struct HtnAsset<T: HtnStateTrait> {
     pub htn: HTN<T>,
+    pub seed: u32,
 }
 
 #[non_exhaustive]
@@ -60,3 +63,11 @@ impl<T: HtnStateTrait> Plugin for HtnAssetPlugin<T> {
         app.init_asset::<HtnAsset<T>>();
     }
 }
+
+// fn asset_event<T: HtnStateTrait>(
+//     mut commands: Commands,
+
+//     mut q: Query<(&HtnSupervisor<T>, &HtnAsset<T>)>,
+// ) {
+//     for (htn_supervisor, htn_asset) in q.iter() {
+// }

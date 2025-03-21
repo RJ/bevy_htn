@@ -108,14 +108,14 @@ impl<T: HtnStateTrait> PrimitiveTask<T> {
 
     pub fn apply_effects(&self, state: &mut T, atr: &AppTypeRegistry) {
         for effect in self.effects.iter() {
-            info!("APPLY: {effect:?}");
+            // info!("APPLY: {effect:?}");
             effect.apply(state, atr);
         }
     }
 
     pub fn apply_expected_effects(&self, state: &mut T, atr: &AppTypeRegistry) {
         for effect in self.expected_effects.iter() {
-            info!("APPLY(expected): {effect:?}");
+            // info!("APPLY(expected): {effect:?}");
             effect.apply(state, atr);
         }
     }
@@ -175,6 +175,16 @@ impl<T: HtnStateTrait> PrimitiveTask<T> {
         self.preconditions
             .iter()
             .all(|cond| cond.evaluate(state, atr))
+    }
+
+    pub fn find_first_failing_precondition(
+        &self,
+        state: &T,
+        atr: &AppTypeRegistry,
+    ) -> Option<&HtnCondition> {
+        self.preconditions
+            .iter()
+            .find(|cond| !cond.evaluate(state, atr))
     }
 }
 

@@ -17,11 +17,45 @@ impl<T: HtnStateTrait> Default for HtnExecutorPlugin<T> {
 
 impl<T: HtnStateTrait> Plugin for HtnExecutorPlugin<T> {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (task_finished, when_to_replan_system::<T>));
+        app.add_systems(
+            Update,
+            (
+                task_finished,
+                when_to_replan_system::<T>,
+                check_plans_still_valid::<T>,
+            ),
+        );
         app.add_observer(on_exec_next_task::<T>);
+        // TODO each T instance of pluin will add this as a global obs, not what we want:
         app.add_observer(on_plan_added);
         app.add_observer(on_task_complete::<T>);
         app.add_observer(on_replan_request::<T>);
+    }
+}
+
+pub trait HtnSupervisorExt {
+    fn spawn_htn_supervisor<T: HtnStateTrait>(
+        &mut self,
+        htn_handle: Handle<HtnAsset<T>>,
+        initial_state: &T,
+    ) -> Entity;
+}
+impl HtnSupervisorExt for EntityCommands<'_> {
+    fn spawn_htn_supervisor<T: HtnStateTrait>(
+        &mut self,
+        htn_handle: Handle<HtnAsset<T>>,
+        initial_state: &T,
+    ) -> Entity {
+        let initial_state = initial_state.clone();
+        let id = self.id();
+        self.commands_mut()
+            .spawn((
+                Name::new("Htn Supervisor"),
+                HtnSupervisor { htn_handle },
+                initial_state,
+            ))
+            .set_parent(id)
+            .id()
     }
 }
 
@@ -92,8 +126,11 @@ fn when_to_replan_system<T: HtnStateTrait>(
             if let Task::Primitive(task) = task {
                 if !task.preconditions_met(&working_state, atr.as_ref()) {
                     info!(
-                        "Aborting current plan, preconditions not met: {}",
-                        task_name.name
+                        "Aborting current plan, preconditions not met: {} `{}`",
+                        task_name.name,
+                        task.find_first_failing_precondition(&working_state, atr.as_ref())
+                            .map(|c| c.syntax())
+                            .unwrap_or("???".to_string())
                     );
                     existing_plan_still_valid = false;
                     break;
@@ -118,6 +155,40 @@ fn when_to_replan_system<T: HtnStateTrait>(
     }
 }
 
+fn check_plans_still_valid<T: HtnStateTrait>(
+    mut q: Query<(Entity, &HtnSupervisor<T>, &T, &mut Plan)>,
+    assets: Res<Assets<HtnAsset<T>>>,
+    atr: Res<AppTypeRegistry>,
+) {
+    for (_sup_entity, htn_supervisor, state, mut plan) in q.iter_mut() {
+        let Some(htn) = assets.get(&htn_supervisor.htn_handle).map(|h| &h.htn) else {
+            warn!("HtnAsset not found");
+            continue;
+        };
+        let mut state = state.clone();
+        for task_name in plan.task_names().iter() {
+            let Some(Task::Primitive(task)) = htn.get_task_by_name(task_name.as_str()) else {
+                panic!("Non primitive task in plan, should not happen");
+            };
+            if !task.preconditions_met(&state, atr.as_ref()) {
+                warn!(
+                    "check_plans_still_valid:Aborting current plan, preconditions not met: {} `{}`",
+                    task_name,
+                    task.find_first_failing_precondition(&state, atr.as_ref())
+                        .map(|c| c.syntax())
+                        .unwrap_or("???".to_string())
+                );
+                // warn!("Aborting current plan, preconditions not met: {task_name}",);
+                plan.abort();
+                break;
+            } else {
+                task.apply_effects(&mut state, atr.as_ref());
+                task.apply_expected_effects(&mut state, atr.as_ref());
+            }
+        }
+    }
+}
+
 fn on_replan_request<T: HtnStateTrait>(
     t: Trigger<ReplanRequest>,
     assets: Res<Assets<HtnAsset<T>>>,
@@ -126,7 +197,7 @@ fn on_replan_request<T: HtnStateTrait>(
     mut commands: Commands,
 ) {
     // these are triggering on the sup entity that has the Plan, State and HTNSupervisor.
-    info!("Replan request event");
+    info!("Replan request event for entity: {:?}", t.entity());
 
     let Ok((htn_supervisor, _parent, state, opt_plan)) = q.get(t.entity()) else {
         warn!("HtnSupervisor not found");
@@ -167,9 +238,11 @@ fn on_replan_request<T: HtnStateTrait>(
     commands.entity(t.entity()).insert(new_plan);
 }
 
-fn on_plan_added(t: Trigger<OnInsert, Plan>, mut commands: Commands) {
+fn on_plan_added(t: Trigger<OnInsert, Plan>, mut commands: Commands, q: Query<&Plan>) {
     // TODO kill any children that are executing an old plan?
     // get the old plan id and kill just those children?
+    let plan = q.get(t.entity()).unwrap();
+    info!("Plan added: {:?}", plan.task_names());
     commands.trigger_targets(ExecNextTask, t.entity());
 }
 
@@ -265,19 +338,16 @@ fn on_exec_next_task<T: HtnStateTrait>(
         return;
     }
 
-    // this will trigger an HtnTaskExecute<Operator> event on our supervisor entity.
-    // but if all we're doing is turning it into a tree, maybe do that internally and yield a non-generic trigger that
-    // includes the plan name, task id, and tree?
     let task_strategy = task.execution_command(state, &type_registry.read(), &task_id);
     match task_strategy {
         TaskExecutionStrategy::BehaviourTree { tree, task_id } => {
             warn!("Executing task: {task_id:?} via behaviour tree: {tree}");
-            let troll_entity = parent.get();
+            let character_entity = parent.get();
             commands
                 .spawn((
                     task_id,
                     BehaveTree::new(tree),
-                    BehaveTargetEntity::Entity(troll_entity),
+                    BehaveTargetEntity::Entity(character_entity),
                     BehaveSupervisorEntity(t.entity()),
                 ))
                 .set_parent(t.entity());

@@ -64,18 +64,17 @@ fn main() {
 
     app.add_systems(OnEnter(LoadingState::Ready), setup_troll_htn_supervisor);
     app.add_systems(OnEnter(LoadingState::SpawningEntities), print_htn);
-    app.add_systems(OnEnter(LoadingState::Ready), trigger_first_plan);
     app.add_systems(Update, troll_enemy_vision_sensor);
 
     app.run();
 }
 
 // ask eveery supervisor to replan.
-fn trigger_first_plan(q: Query<Entity, With<HtnSupervisor<GameState>>>, mut commands: Commands) {
-    info!("Triggering first plan 🥇");
-    q.iter()
-        .for_each(|e| commands.trigger_targets(ReplanRequest, e));
-}
+// fn trigger_first_plan(q: Query<Entity, With<HtnSupervisor<GameState>>>, mut commands: Commands) {
+//     info!("Triggering first plan 🥇");
+//     q.iter()
+//         .for_each(|e| commands.trigger_targets(ReplanRequest, e));
+// }
 
 fn initial_gamestate() -> GameState {
     GameState {
@@ -158,24 +157,12 @@ fn troll_enemy_vision_sensor(
 
 /// When this runs, all entities are spawned and the HTN asset is loaded.
 fn setup_troll_htn_supervisor(mut commands: Commands, rolodex: Res<Rolodex>) {
-    commands
-        .spawn((
-            Name::new("Htn Supervisor"),
-            HtnSupervisor {
-                htn_handle: rolodex.troll_htn.clone(),
-            },
-            initial_gamestate(),
-        ))
-        .set_parent(rolodex.troll)
-        .trigger(ReplanRequest);
+    info!("Installing htn supervisor onto troll entity");
+    let htn_sup = commands
+        .entity(rolodex.troll)
+        .spawn_htn_supervisor(rolodex.troll_htn.clone(), &initial_gamestate());
+    commands.trigger_targets(ReplanRequest, htn_sup);
 }
-
-// need a child of the troll to act as the HtnOperator parent, that holds the plan and has children that
-// contain the operator components.
-// then when an operator completes, it sets HtnOperator.set_result(true), and an OnChange system
-// can despawn that entity and spawn the next one in the plan.
-
-// TODO sensors that update the world state too..
 
 fn print_htn(assets: Res<Assets<HtnAsset<GameState>>>, rolodex: Res<Rolodex>) {
     let Some(htn_asset) = assets.get(&rolodex.troll_htn) else {

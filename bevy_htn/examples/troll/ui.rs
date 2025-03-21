@@ -68,12 +68,20 @@ fn left_sidebar(
     // let mut gamestate = world.query::<&mut GameState>().single_mut(world);
     // let rolodex = world.get_resource::<Rolodex>().unwrap();
     // let troll = rolodex.troll;
-    let (entity, _htn_sup, opt_plan) = world
+    let (entity, htn_sup, opt_plan) = world
         .query_filtered::<(Entity, &HtnSupervisor<GameState>, Option<&Plan>), With<GameState>>()
         .single(world);
     let plan_id_str = opt_plan.map_or("".to_string(), |p| {
         format!(" [{}] = {:?}", p.id(), p.status())
     });
+
+    let assets = world.get_resource::<Assets<HtnAsset<GameState>>>().unwrap();
+    let htn_str = if let Some(htn_asset) = assets.get(&htn_sup.htn_handle) {
+        format!("# {}", htn_asset.seed)
+    } else {
+        "# ???".to_string()
+    };
+
     let tasks = opt_plan
         .map(|plan| {
             plan.tasks
@@ -92,6 +100,7 @@ fn left_sidebar(
         .show(&ctx, |ui| {
             ui.heading("Troll HTN Example");
             ui.separator();
+            ui.heading(htn_str);
             bevy_inspector::ui_for_entity(world, entity, ui);
             ui.heading(format!("Current Plan\n{plan_id_str}",));
             if tasks.is_empty() {

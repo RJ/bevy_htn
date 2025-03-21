@@ -32,6 +32,17 @@ impl Plan {
             status: None,
         }
     }
+    pub fn preconditions_met<T: HtnStateTrait>(&self, state: &T, atr: &AppTypeRegistry) -> bool {
+        // let mut state = state.clone();
+        // for planned_task in self.tasks.iter() {
+        //     if !task.preconditions_met(&state, atr) {
+        //         info!("Preconditions not met for task: {task:?}");
+        //         return false;
+        //     }
+        // }
+        // TODO
+        true
+    }
     pub fn id(&self) -> u32 {
         self.plan_id
     }
