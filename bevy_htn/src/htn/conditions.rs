@@ -394,9 +394,21 @@ impl HtnCondition {
                 // don't know how to dynamically do this, there isn't a ReflectPartialOrd.
                 // so for now i'll just support numbers..
                 let ordering = match type_path {
-                    "i32" => {
-                        val1.try_downcast_ref::<i32>().unwrap().partial_cmp(val2.try_downcast_ref::<i32>().unwrap()).unwrap()
-                    }
+                    "i32" => val1.try_downcast_ref::<i32>().unwrap().partial_cmp(val2.try_downcast_ref::<i32>().unwrap()).unwrap(),
+                    // not supported by effects (yet?) but could still be used in conditions:
+                    "i8" => val1.try_downcast_ref::<i8>().unwrap().partial_cmp(val2.try_downcast_ref::<i8>().unwrap()).unwrap(),
+                    "i16" => val1.try_downcast_ref::<i16>().unwrap().partial_cmp(val2.try_downcast_ref::<i16>().unwrap()).unwrap(),
+                    "i64" => val1.try_downcast_ref::<i64>().unwrap().partial_cmp(val2.try_downcast_ref::<i64>().unwrap()).unwrap(),
+                    "i128" => val1.try_downcast_ref::<i128>().unwrap().partial_cmp(val2.try_downcast_ref::<i128>().unwrap()).unwrap(),
+                    // f
+                    "f32" => val1.try_downcast_ref::<f32>().unwrap().partial_cmp(val2.try_downcast_ref::<f32>().unwrap()).unwrap(),
+                    "f64" => val1.try_downcast_ref::<f64>().unwrap().partial_cmp(val2.try_downcast_ref::<f64>().unwrap()).unwrap(),
+                    // u
+                    "u8" => val1.try_downcast_ref::<u8>().unwrap().partial_cmp(val2.try_downcast_ref::<u8>().unwrap()).unwrap(),
+                    "u16" => val1.try_downcast_ref::<u16>().unwrap().partial_cmp(val2.try_downcast_ref::<u16>().unwrap()).unwrap(),
+                    "u32" => val1.try_downcast_ref::<u32>().unwrap().partial_cmp(val2.try_downcast_ref::<u32>().unwrap()).unwrap(),
+                    "u64" => val1.try_downcast_ref::<u64>().unwrap().partial_cmp(val2.try_downcast_ref::<u64>().unwrap()).unwrap(),
+                    "u128" => val1.try_downcast_ref::<u128>().unwrap().partial_cmp(val2.try_downcast_ref::<u128>().unwrap()).unwrap(),
                     _ => unimplemented!("GreaterThanIdentifier | LessThanIdentifier not implemented for type: {type_path} for condition: `{syntax}`"),
                 };
 
