@@ -13,24 +13,24 @@ pub enum Location {
     Merchant,
 }
 
-/// This is our marker components, so we can keep track of the various in-game entities
-#[derive(Component)]
-struct Miner;
+// /// This is our marker components, so we can keep track of the various in-game entities
+// #[derive(Component)]
+// struct Miner;
 
-#[derive(Component)]
-struct House;
+// #[derive(Component)]
+// struct House;
 
-#[derive(Component)]
-struct Smelter;
+// #[derive(Component)]
+// struct Smelter;
 
-#[derive(Component)]
-struct Mushroom;
+// #[derive(Component)]
+// struct Mushroom;
 
-#[derive(Component)]
-struct Ore;
+// #[derive(Component)]
+// struct Ore;
 
-#[derive(Component)]
-struct Merchant;
+// #[derive(Component)]
+// struct Merchant;
 
 #[derive(Debug, Reflect, Default, Clone, HtnOperator)]
 #[reflect(Default, HtnOperator)]
@@ -99,7 +99,7 @@ fn main() {
     app.add_plugins(HtnAssetPlugin::<GameState>::default());
     app.add_plugins(HtnPlugin::<GameState>::default());
     app.add_systems(Startup, load_htn);
-    app.add_systems(Update, (check_asset_loaded));
+    app.add_systems(Update, check_asset_loaded);
     app.add_observer(on_htn_loaded);
     app.run();
 }

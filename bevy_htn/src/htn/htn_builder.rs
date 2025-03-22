@@ -1,4 +1,4 @@
-use crate::{dsl::parse_htn, HtnStateTrait};
+use crate::HtnStateTrait;
 
 use super::*;
 use bevy::prelude::*;
@@ -147,7 +147,8 @@ impl<T: HtnStateTrait> Task<T> {
     pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
         match self {
             Task::Primitive(primitive) => primitive.verify_effects(state, atr),
-            Task::Compound(compound) => Ok(()), // compound.verify_fields(state, atr)?,
+            // compound tasks don't have effects, only primitive tasks do.
+            Task::Compound(_compound) => Ok(()),
         }
     }
     pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {

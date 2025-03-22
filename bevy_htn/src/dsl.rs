@@ -1,100 +1,153 @@
 use crate::{htn::*, HtnStateTrait};
 use bevy::prelude::*;
-use pest::{iterators::Pair, Parser};
+use pest::{
+    iterators::{Pair, Pairs},
+    Parser,
+};
 use pest_derive::Parser;
 
 #[derive(Parser)]
 #[grammar = "src/htn.pest"]
 pub struct HtnParser;
 
+// inner = [Pair { rule: value_condition, span: Span { str: "energy > 10", start: 228, end: 239 }
+// inner: [Pair { rule: identifier, span: Span { str: "energy", start: 228, end: 234 }, inner: [] },
+// Pair { rule: operator, span: Span { str: ">", start: 235, end: 236 }, inner: [] },
+// Pair { rule: value, span: Span { str: "10", start: 237, end: 239 }, inner: [] }] }]
+// ' panicked at bevy_htn/src/dsl.rs2025-03-21T21:40:04.408699Z  INFO bevy_htn::dsl: field = energy > 10
+
 fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
-    let syntax = pair.as_str().to_string();
-    // 'condition' rule: identifier operator value
-    let mut inner = pair.into_inner();
-    let field = inner.next().unwrap().as_str().to_string();
-    let op = inner.next().unwrap().as_str();
-    let val_str = inner.next().unwrap().as_str();
+    let op = pair.into_inner().next().unwrap();
+    let rule = op.as_rule();
+    let inner_pairs = op.into_inner();
+    match rule {
+        Rule::value_condition => parse_value_condition(inner_pairs),
+        Rule::option_condition => parse_option_condition(inner_pairs),
+        _ => panic!("Invalid condition {}", inner_pairs.as_str()),
+    }
+}
+
+fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
+    let syntax = pairs.as_str().to_string();
+    // eg:  foo >= 10
+    let field = pairs.next().unwrap().as_str().to_string(); // foo
+    let op = pairs.next().unwrap().as_rule(); // Rule::op_gte
+    let value = pairs.next().unwrap();
+    let val_rule = value.as_rule(); // Rule::value
+    let val_str = value.as_str(); // 10
 
     match op {
-        ">=" => {
+        // >, >= of value
+        Rule::op_gte | Rule::op_gt if val_rule == Rule::value => {
             let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
             HtnCondition::GreaterThanInt {
                 field,
                 threshold,
-                orequals: true,
+                orequals: op == Rule::op_gte,
                 syntax,
             }
         }
-        ">" => {
-            let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
-            HtnCondition::GreaterThanInt {
-                field,
-                threshold,
-                orequals: false,
-                syntax,
-            }
-        }
-        "<=" => {
+        // <, <= of value
+        Rule::op_lte | Rule::op_lt if val_rule == Rule::value => {
             let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
             HtnCondition::LessThanInt {
                 field,
                 threshold,
-                orequals: true,
+                orequals: op == Rule::op_lte,
                 syntax,
             }
         }
-        "<" => {
-            let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
-            HtnCondition::LessThanInt {
+        // >, >= of identifier
+        Rule::op_gte | Rule::op_gt if val_rule == Rule::identifier => {
+            HtnCondition::GreaterThanIdentifier {
                 field,
-                threshold,
-                orequals: false,
+                other_field: val_str.to_string(),
+                orequals: op == Rule::op_gte,
                 syntax,
             }
         }
-        "==" | "!=" => {
-            let notted = op == "!=";
-            if val_str.contains("::") {
-                let parts: Vec<&str> = val_str.split("::").collect();
-                let enum_type = parts[0].to_string();
-                let enum_variant = parts[1].to_string();
-                HtnCondition::EqualsEnum {
-                    field,
-                    enum_type,
-                    enum_variant,
-                    notted,
-                    syntax,
-                }
-            } else if let Ok(int_val) = val_str.parse::<i32>() {
+        // <, <= of identifier
+        Rule::op_lte | Rule::op_lt if val_rule == Rule::identifier => {
+            HtnCondition::LessThanIdentifier {
+                field,
+                other_field: val_str.to_string(),
+                orequals: op == Rule::op_lte,
+                syntax,
+            }
+        }
+        // equality of bool
+        Rule::op_eq | Rule::op_neq
+            if val_rule == Rule::value && (val_str == "true" || val_str == "false") =>
+        {
+            let notted = op == Rule::op_neq;
+            let bool_val = match val_str {
+                "true" => true,
+                "false" => false,
+                _ => unreachable!(),
+            };
+            HtnCondition::EqualsBool {
+                field,
+                value: bool_val,
+                notted,
+                syntax,
+            }
+        }
+        // equality of i32
+        Rule::op_eq | Rule::op_neq if val_rule == Rule::value => {
+            let notted = op == Rule::op_neq;
+            if let Ok(int_val) = val_str.parse::<i32>() {
                 HtnCondition::EqualsInt {
                     field,
                     value: int_val,
                     notted,
                     syntax,
                 }
-            } else if val_str == "true" || val_str == "false" {
-                let bool_val = match val_str {
-                    "true" => true,
-                    "false" => false,
-                    _ => panic!("Invalid boolean value"),
-                };
-                HtnCondition::EqualsBool {
-                    field,
-                    value: bool_val,
-                    notted,
-                    syntax,
-                }
             } else {
-                // comparing two identifiers
-                HtnCondition::EqualsIdentifier {
-                    field,
-                    other_field: val_str.to_string(),
-                    notted,
-                    syntax,
-                }
+                panic!("Invalid integer value: {}", val_str);
             }
         }
-        _ => panic!("Unsupported operator: {}", op),
+        // equality of enum
+        Rule::op_eq | Rule::op_neq if val_rule == Rule::enum_value => {
+            let notted = op == Rule::op_neq;
+            // safety: parser ensures a well formed enum containing ::
+            let parts: Vec<&str> = val_str.split("::").collect();
+            let enum_type = parts[0].to_string();
+            let enum_variant = parts[1].to_string();
+            HtnCondition::EqualsEnum {
+                field,
+                enum_type,
+                enum_variant,
+                notted,
+                syntax,
+            }
+        }
+        // equality of identifier
+        Rule::op_eq | Rule::op_neq if val_rule == Rule::identifier => {
+            let notted = op == Rule::op_neq;
+            HtnCondition::EqualsIdentifier {
+                field,
+                other_field: val_str.to_string(),
+                notted,
+                syntax,
+            }
+        }
+
+        _ => panic!("Unsupported operator: {:?}", op),
+    }
+}
+
+fn parse_option_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
+    let syntax = pairs.as_str().to_string();
+    info!("parse_option_condition: {syntax}");
+    // eg:  foo is None 10
+    let field = pairs.next().unwrap().as_str().to_string(); // foo
+    let op = pairs.next().unwrap().as_str(); // is
+    assert_eq!(op, "is");
+    let val_str = pairs.next().unwrap().as_str(); // None or Some
+    match val_str {
+        "None" => HtnCondition::EqualsNone { field, syntax },
+        "Some" => HtnCondition::EqualsSome { field, syntax },
+        _ => panic!("Invalid value for 'is' operator: {syntax}"),
     }
 }
 

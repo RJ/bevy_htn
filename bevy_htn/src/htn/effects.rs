@@ -1,5 +1,3 @@
-use std::any::{Any, TypeId};
-
 use crate::HtnStateTrait;
 
 use super::*;
@@ -121,7 +119,7 @@ impl Effect {
                 let state_dyn_enum = val
                     .reflect_ref()
                     .as_enum()
-                    .map_err(|e| format!("{effect_noun} field '{field}' should be an enum!"))?;
+                    .map_err(|_e| format!("{effect_noun} field '{field}' should be an enum!"))?;
                 let Some(enum_info) = state_dyn_enum.get_represented_enum_info() else {
                     return Err(format!(
                         "{effect_noun} field '{field}' is not a type registered enum"
@@ -221,5 +219,163 @@ impl Effect {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dsl::parse_htn;
+
+    use super::*;
+
+    #[test]
+    fn test_effects() {
+        {
+            // Don't need app, just want to set up the logger.
+            let mut app = App::new();
+            app.add_plugins(bevy::log::LogPlugin::default());
+        }
+
+        #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
+        #[reflect(Default)]
+        enum Location {
+            #[default]
+            Home,
+            Other,
+            Park,
+        }
+
+        #[derive(Reflect, Resource, Clone, Debug, Default, Component)]
+        #[reflect(Default, Resource)]
+        struct State {
+            energy: i32,
+            happy: bool,
+            location: Location,
+            e1: i32,
+            e2: i32,
+        }
+
+        let src = r#"
+    schema {
+        version: 0.1.0
+    }
+            
+    primitive_task "Effects Test" {
+        operator: DummyOperator
+        preconditions: []
+        effects: [
+            happy = true,
+            energy = 200,
+            e1 = e2,
+            energy -= 50,
+            location = Location::Park,
+        ]
+    }
+    "#;
+        let atr = AppTypeRegistry::default();
+        {
+            let mut atr = atr.write();
+            atr.register::<State>();
+            atr.register::<Location>();
+        }
+
+        let htn = parse_htn::<State>(src);
+        let Some(Task::Primitive(pt)) = &htn.tasks.first() else {
+            panic!("Task should exist");
+        };
+        assert_eq!(
+            pt.effects,
+            vec![
+                Effect::SetBool {
+                    field: "happy".to_string(),
+                    value: true,
+                    syntax: "happy = true".to_string(),
+                },
+                Effect::SetInt {
+                    field: "energy".to_string(),
+                    value: 200,
+                    syntax: "energy = 200".to_string(),
+                },
+                Effect::SetIdentifier {
+                    field: "e1".to_string(),
+                    field_source: "e2".to_string(),
+                    syntax: "e1 = e2".to_string(),
+                },
+                Effect::IncrementInt {
+                    field: "energy".to_string(),
+                    by: -50,
+                    syntax: "energy -= 50".to_string(),
+                },
+                Effect::SetEnum {
+                    field: "location".to_string(),
+                    enum_type: "Location".to_string(),
+                    enum_variant: "Park".to_string(),
+                    syntax: "location = Location::Park".to_string(),
+                },
+            ]
+        );
+
+        let initial_state = State {
+            energy: 10,
+            happy: false,
+            location: Location::Home,
+            e1: 1,
+            e2: 2,
+        };
+
+        let mut state = initial_state.clone();
+        let effect = Effect::SetBool {
+            field: "happy".to_string(),
+            value: true,
+            syntax: "happy = true".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert!(state.happy);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::SetInt {
+            field: "energy".to_string(),
+            value: 100,
+            syntax: "energy = 100".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.energy, 100);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::SetIdentifier {
+            field: "e1".to_string(),
+            field_source: "e2".to_string(),
+            syntax: "e1 = e2".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.e1, 2);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::SetEnum {
+            field: "location".to_string(),
+            enum_type: "Location".to_string(),
+            enum_variant: "Park".to_string(),
+            syntax: "location = Location::Park".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.location, Location::Park);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::IncrementInt {
+            field: "energy".to_string(),
+            by: 10,
+            syntax: "energy += 10".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.energy, 20);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::IncrementInt {
+            field: "energy".to_string(),
+            by: -10,
+            syntax: "energy -= 10".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.energy, 0);
     }
 }

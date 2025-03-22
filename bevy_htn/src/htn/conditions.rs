@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::HtnStateTrait;
 
 use super::*;
@@ -10,6 +8,14 @@ use bevy::{
 
 #[derive(Clone, Debug, Reflect, PartialEq, Eq)]
 pub enum HtnCondition {
+    EqualsNone {
+        field: String,
+        syntax: String,
+    },
+    EqualsSome {
+        field: String,
+        syntax: String,
+    },
     EqualsBool {
         field: String,
         value: bool,
@@ -22,9 +28,21 @@ pub enum HtnCondition {
         orequals: bool,
         syntax: String,
     },
+    GreaterThanIdentifier {
+        field: String,
+        other_field: String,
+        orequals: bool,
+        syntax: String,
+    },
     LessThanInt {
         field: String,
         threshold: i32,
+        orequals: bool,
+        syntax: String,
+    },
+    LessThanIdentifier {
+        field: String,
+        other_field: String,
         orequals: bool,
         syntax: String,
     },
@@ -54,10 +72,14 @@ impl HtnCondition {
         match self {
             HtnCondition::EqualsBool { syntax, .. } => syntax.clone(),
             HtnCondition::GreaterThanInt { syntax, .. } => syntax.clone(),
+            HtnCondition::GreaterThanIdentifier { syntax, .. } => syntax.clone(),
             HtnCondition::LessThanInt { syntax, .. } => syntax.clone(),
+            HtnCondition::LessThanIdentifier { syntax, .. } => syntax.clone(),
             HtnCondition::EqualsEnum { syntax, .. } => syntax.clone(),
             HtnCondition::EqualsInt { syntax, .. } => syntax.clone(),
             HtnCondition::EqualsIdentifier { syntax, .. } => syntax.clone(),
+            HtnCondition::EqualsNone { syntax, .. } => syntax.clone(),
+            HtnCondition::EqualsSome { syntax, .. } => syntax.clone(),
         }
     }
     fn verify_field_type<FieldType: 'static>(
@@ -81,7 +103,7 @@ impl HtnCondition {
     pub fn verify_types<T: HtnStateTrait>(
         &self,
         state: &T,
-        atr: &AppTypeRegistry,
+        _atr: &AppTypeRegistry,
     ) -> Result<(), String> {
         let reflected = state
             .reflect_ref()
@@ -100,6 +122,35 @@ impl HtnCondition {
             HtnCondition::EqualsInt { field, syntax, .. } => {
                 Self::verify_field_type::<i32>(reflected, field, syntax)
             }
+            HtnCondition::EqualsNone { field, syntax, .. }
+            | HtnCondition::EqualsSome { field, syntax, .. } => {
+                if let Some(val) = reflected.field(field) {
+                    let dyn_enum = val.reflect_ref().as_enum().map_err(|_| {
+                        format!(
+                            "Field `{field}` is expected to be an Enum, in condition: `{syntax}`"
+                        )
+                    })?;
+                    let enum_info = dyn_enum.get_represented_enum_info().ok_or_else(|| {
+                        format!(
+                            "Field `{field}` is expected to be an Option Enum, in condition: `{syntax}`"
+                        )
+                    })?;
+                    let is_state_field_an_option = enum_info.variant_names().len() == 2
+                        && enum_info.variant_names()[0] == "None"
+                        && enum_info.variant_names()[1] == "Some";
+                    if !is_state_field_an_option {
+                        return Err(format!(
+                            "Field `{field}` is expected to be an Option, in condition: `{syntax}`"
+                        ));
+                    }
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "Unknown state field `{field}` for condition `{syntax}`"
+                    ))
+                }
+            }
+
             HtnCondition::EqualsEnum {
                 field,
                 enum_type,
@@ -140,6 +191,18 @@ impl HtnCondition {
                 }
             }
             HtnCondition::EqualsIdentifier {
+                field: field1,
+                other_field: field2,
+                syntax,
+                ..
+            }
+            | HtnCondition::GreaterThanIdentifier {
+                field: field1,
+                other_field: field2,
+                syntax,
+                ..
+            }
+            | HtnCondition::LessThanIdentifier {
                 field: field1,
                 other_field: field2,
                 syntax,
@@ -300,6 +363,288 @@ impl HtnCondition {
                     false
                 }
             }
+            HtnCondition::GreaterThanIdentifier {
+                field: field1,
+                orequals,
+                other_field: field2,
+                syntax,
+                ..
+            }
+            | HtnCondition::LessThanIdentifier {
+                field: field1,
+                orequals,
+                other_field: field2,
+                syntax,
+                ..
+            } => {
+                let Some(val1) = reflected.field(field1) else {
+                    return false;
+                };
+                let Some(val2) = reflected.field(field2) else {
+                    return false;
+                };
+                let type_path = val1.reflect_short_type_path();
+                if val2.reflect_short_type_path() != type_path {
+                    warn!("Type mismatch for condition: `{syntax}`");
+                    return false;
+                }
+                if *orequals && val1.reflect_partial_eq(val2).unwrap_or(false) {
+                    return true;
+                }
+                // don't know how to dynamically do this, there isn't a ReflectPartialOrd.
+                // so for now i'll just support numbers..
+                let ordering = match type_path {
+                    "i32" => {
+                        val1.try_downcast_ref::<i32>().unwrap().partial_cmp(val2.try_downcast_ref::<i32>().unwrap()).unwrap()
+                    }
+                    _ => unimplemented!("GreaterThanIdentifier | LessThanIdentifier not implemented for type: {type_path} for condition: `{syntax}`"),
+                };
+
+                match self {
+                    HtnCondition::GreaterThanIdentifier { .. } => {
+                        if *orequals {
+                            ordering == std::cmp::Ordering::Greater
+                                || ordering == std::cmp::Ordering::Equal
+                        } else {
+                            ordering == std::cmp::Ordering::Greater
+                        }
+                    }
+                    HtnCondition::LessThanIdentifier { .. } => {
+                        if *orequals {
+                            ordering == std::cmp::Ordering::Less
+                                || ordering == std::cmp::Ordering::Equal
+                        } else {
+                            ordering == std::cmp::Ordering::Less
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            HtnCondition::EqualsNone { field, .. } | HtnCondition::EqualsSome { field, .. } => {
+                if let Some(val) = reflected.field(field) {
+                    let dyn_enum = val
+                        .reflect_ref()
+                        .as_enum()
+                        .expect("Field is not an enum (option)");
+                    let enum_info = dyn_enum
+                        .get_represented_enum_info()
+                        .expect("Field is not an enum");
+                    let is_state_field_an_option = enum_info.variant_names().len() == 2
+                        && enum_info.variant_names()[0] == "None"
+                        && enum_info.variant_names()[1] == "Some";
+
+                    if !is_state_field_an_option {
+                        return false;
+                    }
+                    let var_name = dyn_enum.variant_name();
+                    match self {
+                        HtnCondition::EqualsNone { .. } if var_name == "None" => true,
+                        HtnCondition::EqualsSome { .. } if var_name == "Some" => true,
+                        _ => false,
+                    }
+                } else {
+                    false
+                }
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dsl::parse_htn;
+
+    use super::*;
+
+    #[test]
+    fn test_conditions() {
+        {
+            // Don't need app, just want to set up the logger.
+            let mut app = App::new();
+            app.add_plugins(bevy::log::LogPlugin::default());
+        }
+
+        #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
+        #[reflect(Default)]
+        enum Location {
+            #[default]
+            Home,
+            Other,
+            Park,
+        }
+
+        #[derive(Reflect, Resource, Clone, Debug, Default, Component)]
+        #[reflect(Default, Resource)]
+        struct State {
+            energy: i32,
+            happy: bool,
+            location: Location,
+            e1: i32,
+            e2: i32,
+        }
+
+        let src = r#"
+            schema {
+                version: 0.1.0
+            }
+                    
+            primitive_task "Conditions Test" {
+                operator: DummyOperator
+                preconditions: [
+                    energy > 10,
+                    energy <= 100,
+                    location != Location::Park,
+                    happy == false,
+                    e1 != e2,
+                    e1 > e2,
+                ]
+                effects: [
+                ]
+            }
+            "#;
+        let atr = AppTypeRegistry::default();
+        {
+            let mut atr = atr.write();
+            atr.register::<State>();
+            atr.register::<Location>();
+        }
+        let htn = parse_htn::<State>(src);
+        let state = State::default();
+        assert!(htn.verify_without_operators(&state, &atr).is_ok());
+        // info!("{htn:#?}");
+        let Some(Task::Primitive(pt)) = &htn.tasks.first() else {
+            panic!("Task should exist");
+        };
+        assert_eq!(
+            pt.preconditions,
+            vec![
+                HtnCondition::GreaterThanInt {
+                    field: "energy".to_string(),
+                    threshold: 10,
+                    orequals: false,
+                    syntax: "energy > 10".to_string(),
+                },
+                HtnCondition::LessThanInt {
+                    field: "energy".to_string(),
+                    threshold: 100,
+                    orequals: true,
+                    syntax: "energy <= 100".to_string(),
+                },
+                HtnCondition::EqualsEnum {
+                    field: "location".to_string(),
+                    enum_type: "Location".to_string(),
+                    enum_variant: "Park".to_string(),
+                    notted: true,
+                    syntax: "location != Location::Park".to_string(),
+                },
+                HtnCondition::EqualsBool {
+                    field: "happy".to_string(),
+                    value: false,
+                    notted: false,
+                    syntax: "happy == false".to_string(),
+                },
+                HtnCondition::EqualsIdentifier {
+                    field: "e1".to_string(),
+                    other_field: "e2".to_string(),
+                    notted: true,
+                    syntax: "e1 != e2".to_string(),
+                },
+                HtnCondition::GreaterThanIdentifier {
+                    field: "e1".to_string(),
+                    other_field: "e2".to_string(),
+                    orequals: false,
+                    syntax: "e1 > e2".to_string(),
+                },
+            ]
+        );
+        assert_eq!(pt.name, "Conditions Test");
+        assert_eq!(pt.operator.name(), "DummyOperator");
+        assert_eq!(pt.effects.len(), 0);
+        assert_eq!(pt.expected_effects.len(), 0);
+
+        let state = State {
+            energy: 10,
+            happy: false,
+            location: Location::Home,
+            e1: 1,
+            e2: 2,
+        };
+
+        let condition = HtnCondition::EqualsBool {
+            field: "happy".to_string(),
+            value: false,
+            notted: false,
+            syntax: "happy == false".to_string(),
+        };
+        assert!(condition.evaluate(&state, &atr));
+
+        let condition = HtnCondition::EqualsInt {
+            field: "energy".to_string(),
+            value: 10,
+            notted: false,
+            syntax: "energy == 10".to_string(),
+        };
+        assert!(condition.evaluate(&state, &atr));
+        let state2 = State {
+            energy: 999,
+            ..state.clone()
+        };
+        assert!(!condition.evaluate(&state2, &atr));
+
+        let condition = HtnCondition::GreaterThanInt {
+            field: "energy".to_string(),
+            threshold: 10,
+            orequals: true,
+            syntax: "energy >= 10".to_string(),
+        };
+        assert!(condition.evaluate(&state, &atr));
+
+        let condition = HtnCondition::LessThanInt {
+            field: "energy".to_string(),
+            threshold: 10,
+            orequals: false,
+            syntax: "energy < 10".to_string(),
+        };
+        assert!(!condition.evaluate(&state, &atr));
+
+        let condition = HtnCondition::EqualsEnum {
+            field: "location".to_string(),
+            enum_type: "Location".to_string(),
+            enum_variant: "Park".to_string(),
+            notted: true,
+            syntax: "location != Location::Park".to_string(),
+        };
+        assert!(condition.evaluate(&state, &atr));
+        let state2 = State {
+            location: Location::Park,
+            ..state
+        };
+        assert!(!condition.evaluate(&state2, &atr));
+
+        let condition = HtnCondition::EqualsIdentifier {
+            field: "e1".to_string(),
+            other_field: "e2".to_string(),
+            notted: false,
+            syntax: "e1 == e2".to_string(),
+        };
+        assert!(!condition.evaluate(&state, &atr));
+        let state2 = State {
+            e1: 2,
+            ..state.clone()
+        };
+        assert!(condition.evaluate(&state2, &atr));
+
+        let condition = HtnCondition::GreaterThanIdentifier {
+            field: "e1".to_string(),
+            other_field: "e2".to_string(),
+            orequals: false,
+            syntax: "e1 > e2".to_string(),
+        };
+        assert!(!condition.evaluate(&state, &atr));
+        let state2 = State {
+            e1: 3,
+            ..state.clone()
+        };
+        assert!(condition.evaluate(&state2, &atr));
     }
 }

@@ -430,7 +430,7 @@ fn test_travel_htn() {
 }
 
 #[test]
-fn test_conditions() {
+fn test_options() {
     {
         // Don't need app, just want to set up the logger.
         let mut app = App::new();
@@ -449,13 +449,14 @@ fn test_conditions() {
     #[derive(Reflect, Resource, Clone, Debug, Default, Component)]
     #[reflect(Default, Resource)]
     struct State {
-        energy: i32,
-        happy: bool,
-        location: Location,
-        e1: i32,
-        e2: i32,
+        i: i32,
+        optnum1: Option<i32>,
+        optnum2: Option<i32>,
+        optloc: Option<Location>,
+        loc: Location,
+        threshold: i32,
+        value: i32,
     }
-
     let src = r#"
     schema {
         version: 0.1.0
@@ -464,11 +465,7 @@ fn test_conditions() {
     primitive_task "Conditions Test" {
         operator: DummyOperator
         preconditions: [
-            energy > 10,
-            energy <= 100,
-            location != Location::Park,
-            happy == false,
-            e1 != e2,
+            optnum1 is None, optnum2 is Some
         ]
         effects: [
         ]
@@ -483,268 +480,58 @@ fn test_conditions() {
     let htn = parse_htn::<State>(src);
     let state = State::default();
     assert!(htn.verify_without_operators(&state, &atr).is_ok());
-    // info!("{htn:#?}");
+    info!("{htn:#?}");
     let Some(Task::Primitive(pt)) = &htn.tasks.first() else {
         panic!("Task should exist");
     };
+
     assert_eq!(
         pt.preconditions,
         vec![
-            HtnCondition::GreaterThanInt {
-                field: "energy".to_string(),
-                threshold: 10,
-                orequals: false,
-                syntax: "energy > 10".to_string(),
+            HtnCondition::EqualsNone {
+                field: "optnum1".to_string(),
+                syntax: "optnum1 is None".to_string(),
             },
-            HtnCondition::LessThanInt {
-                field: "energy".to_string(),
-                threshold: 100,
-                orequals: true,
-                syntax: "energy <= 100".to_string(),
-            },
-            HtnCondition::EqualsEnum {
-                field: "location".to_string(),
-                enum_type: "Location".to_string(),
-                enum_variant: "Park".to_string(),
-                notted: true,
-                syntax: "location != Location::Park".to_string(),
-            },
-            HtnCondition::EqualsBool {
-                field: "happy".to_string(),
-                value: false,
-                notted: false,
-                syntax: "happy == false".to_string(),
-            },
-            HtnCondition::EqualsIdentifier {
-                field: "e1".to_string(),
-                other_field: "e2".to_string(),
-                notted: true,
-                syntax: "e1 != e2".to_string(),
-            },
-        ]
-    );
-    assert_eq!(pt.name, "Conditions Test");
-    assert_eq!(pt.operator.name(), "DummyOperator");
-    assert_eq!(pt.effects.len(), 0);
-    assert_eq!(pt.expected_effects.len(), 0);
-
-    let state = State {
-        energy: 10,
-        happy: false,
-        location: Location::Home,
-        e1: 1,
-        e2: 2,
-    };
-
-    let condition = HtnCondition::EqualsBool {
-        field: "happy".to_string(),
-        value: false,
-        notted: false,
-        syntax: "happy == false".to_string(),
-    };
-    assert!(condition.evaluate(&state, &atr));
-
-    let condition = HtnCondition::EqualsInt {
-        field: "energy".to_string(),
-        value: 10,
-        notted: false,
-        syntax: "energy == 10".to_string(),
-    };
-    assert!(condition.evaluate(&state, &atr));
-    let state2 = State {
-        energy: 999,
-        ..state.clone()
-    };
-    assert!(!condition.evaluate(&state2, &atr));
-
-    let condition = HtnCondition::GreaterThanInt {
-        field: "energy".to_string(),
-        threshold: 10,
-        orequals: true,
-        syntax: "energy >= 10".to_string(),
-    };
-    assert!(condition.evaluate(&state, &atr));
-
-    let condition = HtnCondition::LessThanInt {
-        field: "energy".to_string(),
-        threshold: 10,
-        orequals: false,
-        syntax: "energy < 10".to_string(),
-    };
-    assert!(!condition.evaluate(&state, &atr));
-
-    let condition = HtnCondition::EqualsEnum {
-        field: "location".to_string(),
-        enum_type: "Location".to_string(),
-        enum_variant: "Park".to_string(),
-        notted: true,
-        syntax: "location != Location::Park".to_string(),
-    };
-    assert!(condition.evaluate(&state, &atr));
-    let state2 = State {
-        location: Location::Park,
-        ..state
-    };
-    assert!(!condition.evaluate(&state2, &atr));
-
-    let condition = HtnCondition::EqualsIdentifier {
-        field: "e1".to_string(),
-        other_field: "e2".to_string(),
-        notted: false,
-        syntax: "e1 == e2".to_string(),
-    };
-    assert!(!condition.evaluate(&state, &atr));
-    let state2 = State { e1: 2, ..state };
-    assert!(condition.evaluate(&state2, &atr));
-}
-
-#[test]
-fn test_effects() {
-    {
-        // Don't need app, just want to set up the logger.
-        let mut app = App::new();
-        app.add_plugins(bevy::log::LogPlugin::default());
-    }
-
-    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
-    #[reflect(Default)]
-    enum Location {
-        #[default]
-        Home,
-        Other,
-        Park,
-    }
-
-    #[derive(Reflect, Resource, Clone, Debug, Default, Component)]
-    #[reflect(Default, Resource)]
-    struct State {
-        energy: i32,
-        happy: bool,
-        location: Location,
-        e1: i32,
-        e2: i32,
-    }
-
-    let src = r#"
-    schema {
-        version: 0.1.0
-    }
-            
-    primitive_task "Effects Test" {
-        operator: DummyOperator
-        preconditions: []
-        effects: [
-            happy = true,
-            energy = 200,
-            e1 = e2,
-            energy -= 50,
-            location = Location::Park,
-        ]
-    }
-    "#;
-    let atr = AppTypeRegistry::default();
-    {
-        let mut atr = atr.write();
-        atr.register::<State>();
-        atr.register::<Location>();
-    }
-
-    let htn = parse_htn::<State>(src);
-    let Some(Task::Primitive(pt)) = &htn.tasks.first() else {
-        panic!("Task should exist");
-    };
-    assert_eq!(
-        pt.effects,
-        vec![
-            Effect::SetBool {
-                field: "happy".to_string(),
-                value: true,
-                syntax: "happy = true".to_string(),
-            },
-            Effect::SetInt {
-                field: "energy".to_string(),
-                value: 200,
-                syntax: "energy = 200".to_string(),
-            },
-            Effect::SetIdentifier {
-                field: "e1".to_string(),
-                field_source: "e2".to_string(),
-                syntax: "e1 = e2".to_string(),
-            },
-            Effect::IncrementInt {
-                field: "energy".to_string(),
-                by: -50,
-                syntax: "energy -= 50".to_string(),
-            },
-            Effect::SetEnum {
-                field: "location".to_string(),
-                enum_type: "Location".to_string(),
-                enum_variant: "Park".to_string(),
-                syntax: "location = Location::Park".to_string(),
+            HtnCondition::EqualsSome {
+                field: "optnum2".to_string(),
+                syntax: "optnum2 is Some".to_string(),
             },
         ]
     );
 
     let initial_state = State {
-        energy: 10,
-        happy: false,
-        location: Location::Home,
-        e1: 1,
-        e2: 2,
+        threshold: 10,
+        value: 11,
+        optnum2: Some(1),
+        ..default()
     };
+    let condition = HtnCondition::EqualsNone {
+        field: "optnum1".to_string(),
+        syntax: "optnum1 == None".to_string(),
+    };
+    assert!(condition.evaluate(&initial_state, &atr));
 
-    let mut state = initial_state.clone();
-    let effect = Effect::SetBool {
-        field: "happy".to_string(),
-        value: true,
-        syntax: "happy = true".to_string(),
+    let condition = HtnCondition::EqualsNone {
+        field: "optnum2".to_string(),
+        syntax: "optnum2 == None".to_string(),
     };
-    effect.apply(&mut state, &atr);
-    assert!(state.happy);
+    assert!(!condition.evaluate(&initial_state, &atr));
 
-    let mut state = initial_state.clone();
-    let effect = Effect::SetInt {
-        field: "energy".to_string(),
-        value: 100,
-        syntax: "energy = 100".to_string(),
+    let state2 = State {
+        optnum1: Some(123),
+        ..initial_state.clone()
     };
-    effect.apply(&mut state, &atr);
-    assert_eq!(state.energy, 100);
+    let condition = HtnCondition::EqualsNone {
+        field: "optnum1".to_string(),
+        syntax: "optnum1 == None".to_string(),
+    };
+    assert!(!condition.evaluate(&state2, &atr));
 
-    let mut state = initial_state.clone();
-    let effect = Effect::SetIdentifier {
-        field: "e1".to_string(),
-        field_source: "e2".to_string(),
-        syntax: "e1 = e2".to_string(),
+    let condition = HtnCondition::GreaterThanIdentifier {
+        field: "value".to_string(),
+        other_field: "threshold".to_string(),
+        orequals: false,
+        syntax: "value > threshold".to_string(),
     };
-    effect.apply(&mut state, &atr);
-    assert_eq!(state.e1, 2);
-
-    let mut state = initial_state.clone();
-    let effect = Effect::SetEnum {
-        field: "location".to_string(),
-        enum_type: "Location".to_string(),
-        enum_variant: "Park".to_string(),
-        syntax: "location = Location::Park".to_string(),
-    };
-    effect.apply(&mut state, &atr);
-    assert_eq!(state.location, Location::Park);
-
-    let mut state = initial_state.clone();
-    let effect = Effect::IncrementInt {
-        field: "energy".to_string(),
-        by: 10,
-        syntax: "energy += 10".to_string(),
-    };
-    effect.apply(&mut state, &atr);
-    assert_eq!(state.energy, 20);
-
-    let mut state = initial_state.clone();
-    let effect = Effect::IncrementInt {
-        field: "energy".to_string(),
-        by: -10,
-        syntax: "energy -= 10".to_string(),
-    };
-    effect.apply(&mut state, &atr);
-    assert_eq!(state.energy, 0);
+    assert!(condition.evaluate(&initial_state, &atr));
 }
