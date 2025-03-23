@@ -383,16 +383,26 @@ impl HtnCondition {
                 let Some(val2) = reflected.field(field2) else {
                     return false;
                 };
-                let type_path = val1.reflect_short_type_path();
-                if val2.reflect_short_type_path() != type_path {
+                let type_id = val1
+                    .get_represented_type_info()
+                    .map(|inf| inf.type_id())
+                    .unwrap();
+                if val1
+                    .get_represented_type_info()
+                    .map(|inf| inf.type_id())
+                    .unwrap()
+                    != type_id
+                {
                     warn!("Type mismatch for condition: `{syntax}`");
                     return false;
                 }
-                if *orequals && val1.reflect_partial_eq(val2).unwrap_or(false) {
-                    return true;
-                }
                 // don't know how to dynamically do this, there isn't a ReflectPartialOrd.
-                // so for now i'll just support numbers..
+                // so for now i'll just support numbers.
+                let type_path = val1
+                    .get_represented_type_info()
+                    .unwrap()
+                    .type_path_table()
+                    .short_path();
                 let ordering = match type_path {
                     "i32" => val1.try_downcast_ref::<i32>().unwrap().partial_cmp(val2.try_downcast_ref::<i32>().unwrap()).unwrap(),
                     // not supported by effects (yet?) but could still be used in conditions:
