@@ -1,0 +1,79 @@
+schema {
+    version: 0.1.0
+}
+
+compound_task "BeDude" {
+    method "Scared by player proximity" {
+        preconditions: [mood == Mood::Normal, proximity_alert == true]
+        subtasks: [
+            PrepareToFlee,
+            BecomeScared,
+            MoveToNextDestination,
+        ]
+    }
+    method "Celebration" {
+        preconditions: [mood == Mood::Normal, coins_collected >= 3]
+        subtasks: [
+            Celebrate
+        ]
+    }
+    method "Relaxed and wandering" {
+        preconditions: [mood == Mood::Normal, coin_location is None]
+        subtasks: [
+            PickDestination,
+            MoveToNextDestination,
+            Chill,
+        ]
+    }
+    method "Chasing a coin" {
+        preconditions: [mood == Mood::Normal, coin_location is Some]
+        subtasks: [
+            MoveToCoin,
+        ]
+    }
+    method "Cowering" {
+        preconditions: [mood == Mood::Scared]
+        subtasks: [
+            Cower
+        ]
+    }
+}
+
+primitive_task "Chill" {
+    operator: WaitOperator
+}
+
+primitive_task "BecomeScared" {
+    operator: BecomeScaredOperator
+}
+
+primitive_task "Cower" {
+    preconditions: [mood == Mood::Scared]
+    operator: WaitOperator
+}
+
+primitive_task "PrepareToFlee" {
+    operator: PrepareToFleeOperator(player_location)
+    effects: [mood = Mood::Scared]
+}
+
+primitive_task "Celebrate" {
+    operator: SpinOperator
+    effects: [coins_collected = 0]
+}
+
+primitive_task "PickDestination" {
+    operator: PickDestinationOperator
+    // not sure how to represent this... we can't set to Some without a value.
+    // effects: [next_destination = Some]
+}
+
+primitive_task "MoveToNextDestination" {
+    // preconditions: [next_destination is Some]
+    operator: MoveToOperator(next_destination)
+}
+
+primitive_task "MoveToCoin" {
+    preconditions: [coin_location is Some]
+    operator: MoveToOperator(coin_location)
+}

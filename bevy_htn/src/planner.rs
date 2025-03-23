@@ -277,12 +277,12 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
             //     "Processing: {current_task_name} Stack: {:?}",
             //     self.task_stack
             // );
-            info!(
+            debug!(
                 "EVALUATING {current_task_name} with self.skip_methods = {}",
                 self.skip_methods
             );
-            info!(" planner state: {state:?}");
-            info!(" decomp stack len: {:?}", self.decomp_stack.len());
+            debug!(" planner state: {state:?}");
+            debug!(" decomp stack len: {:?}", self.decomp_stack.len());
             match task {
                 Task::Compound(compound) => {
                     // find the first method with passing preconditions
@@ -310,7 +310,7 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
                     if let Some((method, method_index)) =
                         compound.find_method(&state, self.skip_methods, self.atr)
                     {
-                        info!(
+                        debug!(
                             "🟨 {current_task_name} -> {} (using index: {method_index}, skipped {})",
                             method
                                 .name
@@ -327,13 +327,13 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
                             skip_methods: method_index + 1,
                             mtr: self.mtr.clone(),
                         };
-                        info!("📚 Adding {decomposition:?}");
+                        debug!("📚 Adding {decomposition:?}");
                         self.decomp_stack.push(decomposition);
                         // add subtasks to the stack, preserving order
                         for subtask in method.subtasks.iter().rev() {
                             self.task_stack.push_front(subtask.clone());
                         }
-                        info!("🟡 Adding decomposed tasks to plan: {:?}", method.subtasks);
+                        debug!("🟡 Adding decomposed tasks to plan: {:?}", method.subtasks);
                         // do we need to reset the skip_methods when recursively calling ourself?
 
                         // info!("💫 Resetting skip_methods to 0 for {current_task_name}");
@@ -341,7 +341,7 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
                         // how? TODO
                         continue;
                     } else {
-                        info!(
+                        debug!(
                             "🟥 Compound task {current_task_name} has no valid method, skip: {} \nstate was {state:?}",
                             self.skip_methods
                         );
@@ -351,7 +351,7 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
                 }
                 Task::Primitive(primitive) => {
                     if primitive.preconditions_met(&state, self.atr) {
-                        info!(
+                        debug!(
                             "🟢 Adding primitive task to plan: {current_task_name} -> [{}]",
                             final_plan.join(", ")
                         );
@@ -364,26 +364,27 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
                         for effect in primitive.expected_effects.iter() {
                             effect.apply(&mut state, self.atr);
                         }
-                        // info!("Working state is now: {state:?}");
+                        // debug!("Working state is now: {state:?}");
                         continue;
                     } else {
-                        info!("🔴 Primitive task preconditions not met: {current_task_name}\nstate was: {state:?}");
+                        debug!("🔴 Primitive task preconditions not met: {current_task_name}\nstate was: {state:?}");
                         // info!("Current state: {state:?}");
                         // fall through to restore decomp
                     }
                 }
             }
             if let Some(decomp) = self.decomp_stack.pop() {
-                warn!("Restoring decomp {decomp:?}");
+                debug!("Restoring decomp {decomp:?}");
                 final_plan = decomp.final_plan;
                 self.skip_methods = decomp.skip_methods;
                 self.task_stack.push_front(decomp.current_task);
                 self.mtr = decomp.mtr;
             } else {
-                warn!("No decomp, plan failed?");
+                debug!("No decomp, plan failed?");
             }
         }
-        info!("Planning final state: {state:#?}");
+        debug!("Planning final state: {state:#?}");
+        info!("final plan: {final_plan:?}");
         Plan::new(final_plan, self.mtr.clone())
     }
 }

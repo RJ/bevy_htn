@@ -4,16 +4,14 @@
 use crate::*;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
-
-use rand::Rng;
-use std::{f32::consts::TAU, time::Duration};
+use std::time::Duration;
 
 const COIN_PATH: &str = "models/animated/coin.glb";
 const COIN_SECS: u64 = 10;
 const COIN_COLLECT_DIST: f32 = 5.0;
 
 #[derive(Component)]
-struct Coin;
+pub struct Coin;
 
 pub fn coin_plugin(app: &mut App) {
     app.add_systems(
@@ -38,11 +36,7 @@ fn update_coins(
     q_coins
         .iter()
         .for_each(|e| commands.entity(e).despawn_recursive());
-    let a = rand::rng().random_range(0.0..TAU);
-    let max_rad = level_config.width.min(level_config.height) / 2.0;
-    let rad = rand::rng().random_range(0.0..max_rad);
-    let x = rad * a.cos();
-    let z = rad * a.sin();
+    let (x, z) = level_config.random_position();
     commands.trigger(SpawnCoin(x, z));
 }
 

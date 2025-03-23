@@ -68,6 +68,7 @@ impl<T: HtnStateTrait> PrimitiveTask<T> {
         let mut boxed_reflect: Box<dyn Reflect> = reflect_default.default();
 
         for param in self.operator.params().iter() {
+            info!("Operator param: {param}");
             let Ok(Some(state_val_for_param)) =
                 state.reflect_ref().as_struct().map(|s| s.field(param))
             else {

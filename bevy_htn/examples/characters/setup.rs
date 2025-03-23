@@ -1,5 +1,7 @@
 use crate::*;
 use bevy::prelude::*;
+use rand::Rng;
+use std::f32::consts::TAU;
 
 pub fn setup_plugin(app: &mut App) {
     app.insert_resource(AmbientLight {
@@ -19,6 +21,17 @@ pub fn setup_plugin(app: &mut App) {
 pub struct LevelConfig {
     pub width: f32,
     pub height: f32,
+}
+
+impl LevelConfig {
+    pub fn random_position(&self) -> (f32, f32) {
+        let a = rand::rng().random_range(0.0..TAU);
+        let max_rad = self.width.min(self.height) / 2.0;
+        let rad = rand::rng().random_range(0.0..max_rad);
+        let x = rad * a.cos();
+        let z = rad * a.sin();
+        (x, z)
+    }
 }
 
 fn setup(
