@@ -40,11 +40,21 @@ fn add_bots(mut commands: Commands, level_config: Res<LevelConfig>) {
     for _ in 0..1 {
         let (x, z) = level_config.random_position();
         let pos = Vec3::new(x, 0.0, z);
-        commands.spawn((
-            Name::new("Bot"),
-            Dude,
-            Transform::from_scale(Vec3::ONE * 10.0).with_translation(pos),
-        ));
+        let id = commands
+            .spawn((
+                Name::new("Bot"),
+                Dude,
+                Transform::from_scale(Vec3::ONE * 10.0).with_translation(pos),
+            ))
+            .id();
+        commands
+            .spawn((
+                Text2d::new("Bot"),
+                TextLayout::new_with_justify(JustifyText::Center),
+                TextColor(Color::WHITE),
+                Transform::from_translation(Vec3::new(0.0, 6.0, 0.0)),
+            ))
+            .set_parent(id);
     }
 }
 

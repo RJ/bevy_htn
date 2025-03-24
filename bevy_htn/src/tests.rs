@@ -488,11 +488,11 @@ fn test_options() {
     assert_eq!(
         pt.preconditions,
         vec![
-            HtnCondition::EqualsNone {
+            HtnCondition::IsNone {
                 field: "optnum1".to_string(),
                 syntax: "optnum1 is None".to_string(),
             },
-            HtnCondition::EqualsSome {
+            HtnCondition::IsSome {
                 field: "optnum2".to_string(),
                 syntax: "optnum2 is Some".to_string(),
             },
@@ -505,13 +505,13 @@ fn test_options() {
         optnum2: Some(1),
         ..default()
     };
-    let condition = HtnCondition::EqualsNone {
+    let condition = HtnCondition::IsNone {
         field: "optnum1".to_string(),
         syntax: "optnum1 == None".to_string(),
     };
     assert!(condition.evaluate(&initial_state, &atr));
 
-    let condition = HtnCondition::EqualsNone {
+    let condition = HtnCondition::IsNone {
         field: "optnum2".to_string(),
         syntax: "optnum2 == None".to_string(),
     };
@@ -521,7 +521,7 @@ fn test_options() {
         optnum1: Some(123),
         ..initial_state.clone()
     };
-    let condition = HtnCondition::EqualsNone {
+    let condition = HtnCondition::IsNone {
         field: "optnum1".to_string(),
         syntax: "optnum1 == None".to_string(),
     };

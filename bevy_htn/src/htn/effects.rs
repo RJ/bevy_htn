@@ -35,6 +35,10 @@ pub enum Effect {
         enum_variant: String,
         syntax: String,
     },
+    SetNone {
+        field: String,
+        syntax: String,
+    },
 }
 
 impl Effect {
@@ -45,6 +49,7 @@ impl Effect {
             Effect::SetIdentifier { syntax, .. } => syntax,
             Effect::IncrementInt { syntax, .. } => syntax,
             Effect::SetEnum { syntax, .. } => syntax,
+            Effect::SetNone { syntax, .. } => syntax,
         }
     }
     pub fn verify_types<T: HtnStateTrait>(
@@ -104,6 +109,27 @@ impl Effect {
                     ));
                 }
             }
+            Effect::SetNone { field, syntax, .. } => {
+                let Some(val) = reflected.field(field) else {
+                    return Err(format!(
+                        "Unknown state field `{field}` for {effect_noun} `{syntax}`"
+                    ));
+                };
+                let state_dyn_enum = val
+                    .reflect_ref()
+                    .as_enum()
+                    .map_err(|_e| format!("{effect_noun} field '{field}' should be an enum!"))?;
+                let Some(enum_info) = state_dyn_enum.get_represented_enum_info() else {
+                    return Err(format!(
+                        "{effect_noun} field '{field}' is not a type registered enum"
+                    ));
+                };
+                if !enum_info.contains_variant("None") || !enum_info.contains_variant("Some") {
+                    return Err(format!(
+                        "{effect_noun} field '{field}' is not an Option enum, for: {syntax}"
+                    ));
+                }
+            }
             Effect::SetEnum {
                 field,
                 enum_type,
@@ -145,6 +171,7 @@ impl Effect {
         }
         Ok(())
     }
+
     pub fn apply<T: HtnStateTrait>(&self, state: &mut T, atr: &AppTypeRegistry) {
         let reflected = state
             .reflect_mut()
@@ -189,6 +216,22 @@ impl Effect {
                 let newval = newval.clone_value();
                 let val = reflected.field_mut(field).unwrap();
                 val.apply(newval.as_ref());
+            }
+            Effect::SetNone { field, .. } => {
+                let val = reflected.field_mut(field).unwrap();
+                let enum_variant = "None";
+                let state_dyn_enum = val.reflect_mut().as_enum().expect("Field is not an enum");
+                let enum_info = state_dyn_enum
+                    .get_represented_enum_info()
+                    .expect("Field is not an enum");
+                let variant = enum_info.variant(enum_variant).expect("Variant not found");
+                let variant = match variant {
+                    VariantInfo::Struct(..) => unimplemented!("Enum structs not supported"),
+                    VariantInfo::Tuple(..) => unimplemented!("Enum tuples not supported"),
+                    VariantInfo::Unit(_) => DynamicVariant::Unit,
+                };
+                let mut new_dyn_enum = DynamicEnum::new(enum_variant, variant);
+                state_dyn_enum.apply(new_dyn_enum.as_partial_reflect());
             }
             Effect::SetEnum {
                 field,
@@ -253,6 +296,8 @@ mod tests {
             location: Location,
             e1: i32,
             e2: i32,
+            opt: Option<f32>,
+            opt2: Option<f32>,
         }
 
         let src = r#"
@@ -321,6 +366,8 @@ mod tests {
             location: Location::Home,
             e1: 1,
             e2: 2,
+            opt: Some(1.0),
+            opt2: None,
         };
 
         let mut state = initial_state.clone();
@@ -377,5 +424,16 @@ mod tests {
         };
         effect.apply(&mut state, &atr);
         assert_eq!(state.energy, 0);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::SetNone {
+            field: "opt".to_string(),
+            syntax: "opt = None".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.opt, None);
+
+        // there is no SetSome yet. can maybe do it be constructing the default value of the Option Some,
+        // but that should probably be restricted to expected_effects. bit unpleasant.
     }
 }

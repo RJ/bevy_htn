@@ -8,11 +8,11 @@ use bevy::{
 
 #[derive(Clone, Debug, Reflect, PartialEq, Eq)]
 pub enum HtnCondition {
-    EqualsNone {
+    IsNone {
         field: String,
         syntax: String,
     },
-    EqualsSome {
+    IsSome {
         field: String,
         syntax: String,
     },
@@ -78,8 +78,8 @@ impl HtnCondition {
             HtnCondition::EqualsEnum { syntax, .. } => syntax.clone(),
             HtnCondition::EqualsInt { syntax, .. } => syntax.clone(),
             HtnCondition::EqualsIdentifier { syntax, .. } => syntax.clone(),
-            HtnCondition::EqualsNone { syntax, .. } => syntax.clone(),
-            HtnCondition::EqualsSome { syntax, .. } => syntax.clone(),
+            HtnCondition::IsNone { syntax, .. } => syntax.clone(),
+            HtnCondition::IsSome { syntax, .. } => syntax.clone(),
         }
     }
     fn verify_field_type<FieldType: 'static>(
@@ -122,8 +122,8 @@ impl HtnCondition {
             HtnCondition::EqualsInt { field, syntax, .. } => {
                 Self::verify_field_type::<i32>(reflected, field, syntax)
             }
-            HtnCondition::EqualsNone { field, syntax, .. }
-            | HtnCondition::EqualsSome { field, syntax, .. } => {
+            HtnCondition::IsNone { field, syntax, .. }
+            | HtnCondition::IsSome { field, syntax, .. } => {
                 if let Some(val) = reflected.field(field) {
                     let dyn_enum = val.reflect_ref().as_enum().map_err(|_| {
                         format!(
@@ -442,7 +442,7 @@ impl HtnCondition {
                     _ => unreachable!(),
                 }
             }
-            HtnCondition::EqualsNone { field, .. } | HtnCondition::EqualsSome { field, .. } => {
+            HtnCondition::IsNone { field, .. } | HtnCondition::IsSome { field, .. } => {
                 if let Some(val) = reflected.field(field) {
                     let dyn_enum = val
                         .reflect_ref()
@@ -460,8 +460,8 @@ impl HtnCondition {
                     }
                     let var_name = dyn_enum.variant_name();
                     match self {
-                        HtnCondition::EqualsNone { .. } if var_name == "None" => true,
-                        HtnCondition::EqualsSome { .. } if var_name == "Some" => true,
+                        HtnCondition::IsNone { .. } if var_name == "None" => true,
+                        HtnCondition::IsSome { .. } if var_name == "Some" => true,
                         _ => false,
                     }
                 } else {

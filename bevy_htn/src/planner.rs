@@ -385,6 +385,7 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
         }
         debug!("Planning final state: {state:#?}");
         info!("final plan: {final_plan:?}");
+        info!("final mtr: {:#?}", self.mtr);
         Plan::new(final_plan, self.mtr.clone())
     }
 }

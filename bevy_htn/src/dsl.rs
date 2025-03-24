@@ -145,8 +145,8 @@ fn parse_option_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
     assert_eq!(op, "is");
     let val_str = pairs.next().unwrap().as_str(); // None or Some
     match val_str {
-        "None" => HtnCondition::EqualsNone { field, syntax },
-        "Some" => HtnCondition::EqualsSome { field, syntax },
+        "None" => HtnCondition::IsNone { field, syntax },
+        "Some" => HtnCondition::IsSome { field, syntax },
         _ => panic!("Invalid value for 'is' operator: {syntax}"),
     }
 }
