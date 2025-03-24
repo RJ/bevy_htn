@@ -210,6 +210,7 @@ fn on_become_scared(
     t: Trigger<BehaveTrigger<BecomeScaredOperator>>,
     mut commands: Commands,
     mut q: Query<&mut GameState>,
+    mut q_cc: Query<&mut Cc>,
     time: Res<Time>,
 ) {
     let ctx = t.ctx();
@@ -221,6 +222,8 @@ fn on_become_scared(
         .expect("GameState not found");
     state.scared_at_time = Some(time.elapsed_secs());
     state.mood = Mood::Scared;
+    let mut cc = q_cc.get_mut(ctx.target_entity()).expect("Dude not found");
+    cc.jump();
     commands.trigger(ctx.success());
 }
 
@@ -275,7 +278,7 @@ fn on_add_move_to(
 ) {
     let (move_to, ctx) = q_ctx.get(t.entity()).expect("Context not found");
     let mut cc = q.get_mut(ctx.target_entity()).expect("Dude not found");
-    cc.new_dest = Some(move_to.0.unwrap());
+    cc.goto(move_to.0.unwrap());
 }
 
 // all we need to do here is trigger success when the dude is at the destination
@@ -293,16 +296,15 @@ fn move_to_system(
     }
 }
 
-// we rely on Be
+// we rely on BehaveTimeout, a required component of SpinOperator, to trigger success of this behaviour.
 fn spin_system(
     q_behave: Query<(&BehaveCtx, &SpinOperator)>,
     mut q_dude: Query<&mut Transform, With<Dude>>,
-    mut commands: Commands,
     time: Res<Time>,
 ) {
     for (ctx, spin) in q_behave.iter() {
         let mut dude_transform = q_dude.get_mut(ctx.target_entity()).expect("Dude not found");
-        dude_transform.rotation = Quat::from_rotation_y(time.elapsed_secs() * 5.0);
+        dude_transform.rotation = Quat::from_rotation_y(time.elapsed_secs() * 10.0);
     }
 }
 

@@ -1,7 +1,7 @@
 use bevy::{color::palettes::css, prelude::*};
 use std::time::Duration;
 
-use crate::CursorGroundCoords;
+use crate::{coins::CoinCollected, CursorGroundCoords, GameState};
 const CHARACTER_PATH: &str = "models/animated/character.glb";
 const G: f32 = 80.0;
 
@@ -26,8 +26,12 @@ pub fn dude_plugin(app: &mut App) {
 
 /// Marker for all characters, human or AI
 #[derive(Component)]
-#[require(Name(|| Name::new("Dude")))]
-#[require(Cc(|| Cc{speed: 70.0, jump_vel: 30.0, ..default()}))]
+#[require(Name(|| Name::new("Boxy Dude")))]
+#[require(Cc(|| Cc {
+    speed: 50.0,
+    jump_vel: 20.0,
+    ..default()
+}))]
 pub struct Dude;
 
 /// Controlled by human marker
@@ -70,6 +74,7 @@ fn on_spawn_dude(t: Trigger<OnAdd, Dude>, mut commands: Commands, asset_server: 
         .insert(SceneRoot(
             asset_server.load(GltfAssetLabel::Scene(0).from_asset(CHARACTER_PATH)),
         ))
+        .observe(on_coin_collected)
         .observe(on_control_animation);
 }
 
@@ -80,6 +85,14 @@ fn on_spawn_player(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    commands.entity(t.entity()).insert((
+        Name::new("Player Character"),
+        Cc {
+            speed: 70.0,
+            jump_vel: 30.0,
+            ..default()
+        },
+    ));
     commands
         .spawn((
             Name::new("Player Marker Mesh"),
@@ -93,12 +106,7 @@ fn on_spawn_player(
 
 fn spawn_player(mut commands: Commands) {
     // Character at 0,0,0
-    commands.spawn((
-        Name::new("Character"),
-        Player,
-        Dude,
-        Transform::from_scale(Vec3::ONE * 10.0),
-    ));
+    commands.spawn((Player, Dude, Transform::from_scale(Vec3::ONE * 10.0)));
 }
 
 #[derive(Component, Default, Reflect)]
@@ -107,11 +115,20 @@ pub struct Cc {
     xz_vel: Vec2,
     speed: f32,
     do_jump: bool,
-    pub new_dest: Option<Vec2>,
+    new_dest: Option<Vec2>,
     jump_vel: f32,
     desired_anim: Anims,
     stopping: bool,
     pub destination: Option<Vec2>,
+}
+
+impl Cc {
+    pub fn jump(&mut self) {
+        self.do_jump = true;
+    }
+    pub fn goto(&mut self, dest: Vec2) {
+        self.new_dest = Some(dest);
+    }
 }
 
 #[derive(Component)]
@@ -122,10 +139,19 @@ pub struct ControlAnimation {
     pub anim: Anims,
 }
 
+fn on_coin_collected(t: Trigger<CoinCollected>, mut q: Query<(&mut GameState, &Parent)>) {
+    for (mut state, parent) in q.iter_mut() {
+        if parent.get() == t.entity() {
+            state.coins_collected += 1;
+            return;
+        }
+    }
+}
+
 fn on_control_animation(
     t: Trigger<ControlAnimation>,
     animations: Res<Animations>,
-    q_char: Query<(&Cc, &Children)>,
+    _q_char: Query<(&Cc, &Children)>,
     q_anim_parents: Query<(&Children, &Parent), With<AnimParent>>,
     mut q_anim: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
 ) {
@@ -166,15 +192,19 @@ fn on_control_animation(
 // map mouse inputs to player's CC.
 fn sample_inputs(
     mouse: Res<ButtonInput<MouseButton>>,
-    mut q: Query<&mut Cc, (With<Player>, With<Dude>)>,
+    mut q: Query<(&mut Cc, &Transform), (With<Player>, With<Dude>)>,
     ground_pos: Res<CursorGroundCoords>,
 ) {
-    let Ok(mut cc) = q.get_single_mut() else {
+    let Ok((mut cc, transform)) = q.get_single_mut() else {
         return;
     };
     cc.do_jump = mouse.pressed(MouseButton::Right);
     if mouse.pressed(MouseButton::Left) {
         cc.new_dest = Some(ground_pos.global.xz());
+    } else if mouse.just_released(MouseButton::Left) {
+        // change destination to a little way in front so we skid to a stop
+        let dest = transform.translation + -transform.forward() * 7.0;
+        cc.destination = Some(dest.xz());
     }
 }
 
