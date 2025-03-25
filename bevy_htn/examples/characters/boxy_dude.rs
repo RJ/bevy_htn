@@ -243,7 +243,7 @@ fn character_controller(
     time: Res<Time>,
     mut gizmos: Gizmos,
 ) {
-    for (mut transform, mut cc, is_player) in q.iter_mut() {
+    for (mut transform, mut cc, _is_player) in q.iter_mut() {
         let dt = time.delta_secs();
 
         // figure out the correct animation, defaulting to idle:

@@ -1,74 +1,56 @@
-use crate::{htn::*, HtnStateTrait};
-use bevy::prelude::*;
-use pest::{
-    iterators::{Pair, Pairs},
-    Parser,
-};
+use crate::{error::HtnErr, htn::*, HtnStateTrait};
+use pest::{iterators::Pair, Parser};
 use pest_derive::Parser;
 
 #[derive(Parser)]
 #[grammar = "src/htn.pest"]
 pub struct HtnParser;
 
-// fn parse_condition(pair: Pair<Rule>) -> Result<HtnCondition, String> {
-//     let op = pair.into_inner().next().unwrap();
-//     let rule = op.as_rule();
-//     let inner_pairs = op.into_inner();
-//     match rule {
-//         Rule::value_condition => parse_value_condition(inner_pairs),
-//         Rule::option_condition => parse_option_condition(inner_pairs),
-//         _ => panic!("Invalid condition {}", inner_pairs.as_str()),
-//     }
-// }
-
-fn parse_f32(val_str: &str, context: &str) -> Result<f32, String> {
-    let Ok(f) = val_str.parse::<f32>() else {
-        return Err(format!(
-            "Invalid float `{val_str}` in condition: `{context}`"
-        ));
-    };
-    Ok(f)
+fn parse_f32(val_str: &str, context: &str) -> Result<f32, HtnErr> {
+    val_str.parse::<f32>().map_err(|_| HtnErr::Float {
+        syntax: val_str.to_string(),
+        details: format!("Invalid float `{val_str}` in: `{context}`"),
+    })
 }
 
-fn parse_i32(val_str: &str, context: &str) -> Result<i32, String> {
-    let Ok(i) = val_str.parse::<i32>() else {
-        return Err(format!(
-            "Invalid integer `{val_str}` in condition: `{context}`"
-        ));
-    };
-    Ok(i)
+fn parse_i32(val_str: &str, context: &str) -> Result<i32, HtnErr> {
+    val_str.parse::<i32>().map_err(|_| HtnErr::Int {
+        syntax: val_str.to_string(),
+        details: format!("Invalid integer `{val_str}` in: `{context}`"),
+    })
 }
 
-fn parse_bool(val_str: &str, context: &str) -> Result<bool, String> {
-    if val_str == "true" {
-        Ok(true)
-    } else if val_str == "false" {
-        Ok(false)
-    } else {
-        Err(format!(
-            "Invalid boolean `{val_str}` in condition: `{context}`"
-        ))
+fn parse_bool(val_str: &str, context: &str) -> Result<bool, HtnErr> {
+    match val_str {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(HtnErr::Bool {
+            syntax: val_str.to_string(),
+            details: format!("Invalid boolean `{val_str}` in: `{context}`"),
+        }),
     }
 }
 
-fn parse_enum(val_str: &str, context: &str) -> Result<(String, String), String> {
+fn parse_enum(val_str: &str, context: &str) -> Result<(String, String), HtnErr> {
     let parts: Vec<&str> = val_str.split("::").collect();
     if parts.len() != 2 {
-        return Err(format!(
-            "Invalid enum `{val_str}` in condition: `{context}`"
-        ));
+        return Err(HtnErr::Enum {
+            syntax: val_str.to_string(),
+            details: format!("Invalid enum `{val_str}` in: `{context}`"),
+        });
     }
     let enum_type = parts[0].to_string();
     let enum_variant = parts[1].to_string();
     if enum_type.is_empty() || enum_variant.is_empty() {
-        return Err(format!(
-            "Invalid enum `{val_str}` in condition: `{context}`"
-        ));
+        return Err(HtnErr::Enum {
+            syntax: val_str.to_string(),
+            details: format!("Invalid enum `{val_str}` in: `{context}`"),
+        });
     }
     Ok((enum_type, enum_variant))
 }
 
-fn parse_condition(pair: Pair<Rule>) -> Result<HtnCondition, String> {
+fn parse_condition(pair: Pair<Rule>) -> Result<HtnCondition, HtnErr> {
     let syntax = pair.as_str().to_string();
     let mut pairs = pair.into_inner();
     // eg:  foo >= 10
@@ -168,13 +150,17 @@ fn parse_condition(pair: Pair<Rule>) -> Result<HtnCondition, String> {
             notted,
             syntax,
         },
-
-        _ => return Err(format!("Unsupported condition `{syntax}`")),
+        _ => {
+            return Err(HtnErr::Condition {
+                syntax: syntax.clone(),
+                details: format!("Unsupported condition `{syntax}`"),
+            })
+        }
     };
     Ok(condition)
 }
 
-fn parse_effect(pair: Pair<Rule>) -> Result<Effect, String> {
+fn parse_effect(pair: Pair<Rule>) -> Result<Effect, HtnErr> {
     let syntax = pair.as_str().to_string();
     // let inner_pair = pair.into_inner().next().unwrap();
     let effect_pair = pair.into_inner().next().unwrap();
@@ -228,12 +214,17 @@ fn parse_effect(pair: Pair<Rule>) -> Result<Effect, String> {
             by: -parse_i32(val_str, &syntax)?,
             syntax,
         },
-        _ => return Err(format!("Unsupported effect type: `{syntax}`")),
+        _ => {
+            return Err(HtnErr::Effect {
+                syntax: syntax.clone(),
+                details: format!("Unsupported effect type: `{syntax}`"),
+            })
+        }
     };
     Ok(effect)
 }
 
-fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<PrimitiveTask<T>, String> {
+fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<PrimitiveTask<T>, HtnErr> {
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
     let mut builder = PrimitiveTaskBuilder::<T>::new(name);
@@ -247,7 +238,6 @@ fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<PrimitiveT
                 let op_name = op_parts.next().unwrap().as_str().to_string();
                 let params: Vec<String> =
                     op_parts.map(|param| param.as_str().to_string()).collect();
-                bevy::log::warn!("params = {params:?}");
                 builder = builder.operator(Operator::Trigger {
                     name: op_name,
                     params,
@@ -293,7 +283,7 @@ fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<PrimitiveT
     Ok(builder.build())
 }
 
-fn parse_method<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<Method<T>, String> {
+fn parse_method<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<Method<T>, HtnErr> {
     let mut builder = MethodBuilder::<T>::new();
     let mut inner = pair.into_inner().peekable();
 
@@ -335,7 +325,7 @@ fn parse_method<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<Method<T>, String>
     Ok(builder.build())
 }
 
-fn parse_compound_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<CompoundTask<T>, String> {
+fn parse_compound_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<CompoundTask<T>, HtnErr> {
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
     let mut builder = CompoundTaskBuilder::<T>::new(name);
@@ -350,7 +340,7 @@ fn parse_compound_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<CompoundTas
     Ok(builder.build())
 }
 
-fn parse_schema(pair: Pair<Rule>) -> Result<HtnSchema, String> {
+fn parse_schema(pair: Pair<Rule>) -> Result<HtnSchema, HtnErr> {
     let mut inner_rules = pair.into_inner();
     let ver = inner_rules.next().unwrap();
     if ver.as_rule() == Rule::schema_version_statement {
@@ -359,22 +349,27 @@ fn parse_schema(pair: Pair<Rule>) -> Result<HtnSchema, String> {
             let version = version_pair.as_str().to_string();
             Ok(HtnSchema { version })
         } else {
-            Err(format!(
-                "Invalid version field `{}` in htn schema",
-                version_pair.as_str()
-            ))
+            Err(HtnErr::Schema {
+                details: format!(
+                    "Invalid version field `{}` in htn schema",
+                    version_pair.as_str()
+                ),
+            })
         }
     } else {
-        Err(format!(
-            "Expected version field in htn schema, found: `{}`",
-            ver.as_str()
-        ))
+        Err(HtnErr::Schema {
+            details: format!(
+                "Expected version field in htn schema, found: `{}`",
+                ver.as_str()
+            ),
+        })
     }
 }
 
-// TODO error handling. return Result..
-pub fn parse_htn<T: HtnStateTrait>(input: &str) -> Result<HTN<T>, String> {
-    let pairs = HtnParser::parse(Rule::domain, input).map_err(|e| e.to_string())?;
+pub fn parse_htn<T: HtnStateTrait>(input: &str) -> Result<HTN<T>, HtnErr> {
+    let pairs = HtnParser::parse(Rule::domain, input).map_err(|e| HtnErr::ParserError {
+        details: e.to_string(),
+    })?;
     let mut htn_builder = HTN::<T>::builder();
 
     let htn_pair = pairs.into_iter().next().unwrap();

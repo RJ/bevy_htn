@@ -117,35 +117,8 @@ fn when_to_replan_system<T: HtnStateTrait>(
             return;
         };
         // the game state has changed, is the current plan still valid?
-        // we copy the current ECS world state as a starting point, to which we applyy all tasks
-        // effects as we walk the task list.
-        let mut working_state = state.clone();
-        let mut existing_plan_still_valid = true;
-        for task_name in plan.tasks.iter() {
-            let task = htn.get_task_by_name(task_name.name.as_str()).unwrap();
-            if let Task::Primitive(task) = task {
-                if !task.preconditions_met(&working_state, atr.as_ref()) {
-                    info!(
-                        "Aborting current plan, preconditions not met: {} `{}`",
-                        task_name.name,
-                        task.find_first_failing_precondition(&working_state, atr.as_ref())
-                            .map(|c| c.syntax())
-                            .unwrap_or("???".to_string())
-                    );
-                    existing_plan_still_valid = false;
-                    break;
-                }
-                task.apply_effects(&mut working_state, atr.as_ref());
-                task.apply_expected_effects(&mut working_state, atr.as_ref());
-            } else {
-                panic!("Non primitive task in plan, should not happen");
-            }
-        }
-
-        if !existing_plan_still_valid {
-            info!("🚫 Plan is no longer valid, aborting and replanning.");
+        if !plan.check_validity(htn, state.clone(), atr.as_ref()) {
             plan.abort();
-
             commands.trigger_targets(ReplanRequest, sup_entity);
             continue;
         }
@@ -165,26 +138,8 @@ fn check_plans_still_valid<T: HtnStateTrait>(
             warn!("HtnAsset not found");
             continue;
         };
-        let mut state = state.clone();
-        for task_name in plan.task_names().iter() {
-            let Some(Task::Primitive(task)) = htn.get_task_by_name(task_name.as_str()) else {
-                panic!("Non primitive task in plan, should not happen");
-            };
-            if !task.preconditions_met(&state, atr.as_ref()) {
-                warn!(
-                    "check_plans_still_valid:Aborting current plan, preconditions not met: {} `{}`",
-                    task_name,
-                    task.find_first_failing_precondition(&state, atr.as_ref())
-                        .map(|c| c.syntax())
-                        .unwrap_or("???".to_string())
-                );
-                // warn!("Aborting current plan, preconditions not met: {task_name}",);
-                plan.abort();
-                break;
-            } else {
-                task.apply_effects(&mut state, atr.as_ref());
-                task.apply_expected_effects(&mut state, atr.as_ref());
-            }
+        if !plan.check_validity(htn, state.clone(), atr.as_ref()) {
+            plan.abort();
         }
     }
 }
@@ -216,25 +171,23 @@ fn on_replan_request<T: HtnStateTrait>(
         // if existing plan is finished, we'll have to replan anyway.
         if existing_plan_active {
             if *existing_plan == new_plan {
-                info!("🔂 Plan is the same as existing, skipping");
+                debug!("🔂 Plan is the same as existing, skipping");
                 return;
             }
             // seems ok but plans that are finished need to not exist, because finished high pri
             // plans are trumping new ones atm.
             // need to make overall plan completion work better.
             if *existing_plan > new_plan {
-                warn!("Existing plan, which is active, has higher priority, ignoring new plan.");
-                warn!("Ignored New plan: {new_plan}");
-                warn!(
-                    "Existing plan: {existing_plan} status: {:?}",
-                    existing_plan.status()
-                );
+                debug!("Existing plan, which is active, has higher priority, ignoring new plan: {new_plan}");
+                // warn!("Ignored New plan: {new_plan}");
+                // warn!(
+                //     "Existing plan: {existing_plan} status: {:?}",
+                //     existing_plan.status()
+                // );
                 return;
             }
         }
     }
-
-    info!("🗺️ Inserting New Plan: {new_plan}");
     commands.entity(t.entity()).insert(new_plan);
 }
 
@@ -242,7 +195,7 @@ fn on_plan_added(t: Trigger<OnInsert, Plan>, mut commands: Commands, q: Query<&P
     // TODO kill any children that are executing an old plan?
     // get the old plan id and kill just those children?
     let plan = q.get(t.entity()).unwrap();
-    info!("Plan added: {:?}", plan.task_names());
+    info!("🗺️ Plan Inserted: {}", plan.task_names().join(", "));
     commands.trigger_targets(ExecNextTask, t.entity());
 }
 
@@ -253,7 +206,7 @@ fn on_task_complete<T: HtnStateTrait>(
     atr: Res<AppTypeRegistry>,
     mut commands: Commands,
 ) {
-    info!("Task complete event: {t:?}");
+    info!("Task complete event: {}", t.event().task_id.name());
     let TaskComplete { task_id, success } = t.event();
     let sup_entity = t.entity();
     let Ok((mut plan, htn_sup, mut state)) = q.get_mut(sup_entity) else {
@@ -261,7 +214,7 @@ fn on_task_complete<T: HtnStateTrait>(
         return;
     };
     if plan.id() != task_id.plan_id() {
-        info!("Task {task_id:?} is from a different plan, ignoring result");
+        warn!("Task {task_id:?} is from a different plan, ignoring result");
         return;
     }
     let htn = &assets.get(htn_sup.htn_handle.id()).unwrap().htn;
@@ -273,7 +226,7 @@ fn on_task_complete<T: HtnStateTrait>(
     if *success {
         match task {
             Task::Primitive(primitive) => {
-                warn!("Applying effects for primitive task: {task_id:?}");
+                // warn!("Applying effects for primitive task: {task_id:?}");
                 // bypassing change detection here, any effect of a completed task will already
                 // be anticipated by the planner, no need to cause a replan.
                 primitive.apply_effects(state.bypass_change_detection(), atr.as_ref());
@@ -315,7 +268,7 @@ fn on_exec_next_task<T: HtnStateTrait>(
     // kill any children executing a previous plan:
     if let Some(children) = children {
         for child in children.iter().filter(|c| q_children.contains(**c)) {
-            info!("Killing child executing old plan: {child:?}");
+            debug!("Killing child executing old plan: {child:?}");
             commands
                 .entity(t.entity())
                 .remove_children(&[*child])
@@ -332,7 +285,7 @@ fn on_exec_next_task<T: HtnStateTrait>(
         panic!("Task {task_id:?} is not a primitive on this htn");
     };
     if !task.preconditions_met(state, type_registry.as_ref()) {
-        info!("Task {task_id:?} preconditions not met, failing plan - replanning.");
+        debug!("Task {task_id:?} preconditions not met, failing plan - replanning.");
         plan.abort();
         commands.trigger_targets(ReplanRequest, sup_entity);
         return;
@@ -341,7 +294,7 @@ fn on_exec_next_task<T: HtnStateTrait>(
     let task_strategy = task.execution_command(state, &type_registry.read(), &task_id);
     match task_strategy {
         TaskExecutionStrategy::BehaviourTree { tree, task_id } => {
-            warn!("Executing task: {task_id:?} via behaviour tree: {tree}");
+            warn!("Executing operator: {}", task_id.name());
             let character_entity = parent.get();
             commands
                 .spawn((

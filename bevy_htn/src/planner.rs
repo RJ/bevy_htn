@@ -62,6 +62,36 @@ impl Plan {
         self.tasks.iter().map(|t| t.name.clone()).collect()
     }
 
+    /// Iterates over primitive tasks in plan, checking working_state preconditions met, then
+    /// applying effects and checking next task, etc.
+    pub fn check_validity<T: HtnStateTrait>(
+        &self,
+        htn: &HTN<T>,
+        mut working_state: T,
+        atr: &AppTypeRegistry,
+    ) -> bool {
+        for task_name in self.tasks.iter() {
+            let task = htn.get_task_by_name(task_name.name.as_str()).unwrap();
+            if let Task::Primitive(task) = task {
+                if !task.preconditions_met(&working_state, atr) {
+                    info!(
+                        "Plan invalidated, preconditions not met: {} `{}`",
+                        task_name.name,
+                        task.find_first_failing_precondition(&working_state, atr)
+                            .map(|c| c.syntax())
+                            .unwrap_or("???".to_string())
+                    );
+                    return false;
+                }
+                task.apply_effects(&mut working_state, atr);
+                task.apply_expected_effects(&mut working_state, atr);
+            } else {
+                panic!("Non primitive task in plan, should not happen");
+            }
+        }
+        true
+    }
+
     /// Marks next task as running and returns the planned task id
     pub fn next_task_to_execute(&mut self) -> Option<PlannedTaskId> {
         if self.status.is_some() {
@@ -251,7 +281,7 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
         self.task_stack
             .push_back(self.htn.root_task().name().to_string());
         let mut state = initial_state.clone();
-        info!("PLAN initial state: {state:?}");
+        // debug!("PLAN initial state: {state:?}");
         // Using vecdeque as a stack, top of stack (next item) is the FRONT
         while let Some(current_task_name) = self.task_stack.pop_front() {
             sanity_count += 1;
@@ -384,8 +414,7 @@ impl<'a, T: HtnStateTrait> HtnPlanner<'a, T> {
             }
         }
         debug!("Planning final state: {state:#?}");
-        info!("final plan: {final_plan:?}");
-        info!("final mtr: {:#?}", self.mtr);
+        info!("final plan: {final_plan:?} mtr: {:?}", self.mtr);
         Plan::new(final_plan, self.mtr.clone())
     }
 }

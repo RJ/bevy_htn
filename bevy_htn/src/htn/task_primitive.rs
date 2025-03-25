@@ -1,4 +1,5 @@
 use super::*;
+use crate::error::HtnErr;
 use crate::reflect_operator::*;
 use crate::HtnStateTrait;
 use crate::PlannedTaskId;
@@ -122,7 +123,7 @@ impl<T: HtnStateTrait> PrimitiveTask<T> {
     }
 
     /// Checks any field names used in effects, expected_effects, are present in the state.
-    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         for effect in self.effects.iter() {
             effect.verify_types(state, atr, false)?;
         }
@@ -132,7 +133,7 @@ impl<T: HtnStateTrait> PrimitiveTask<T> {
         Ok(())
     }
 
-    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         for cond in self.preconditions.iter() {
             cond.verify_types(state, atr)?;
         }
@@ -141,20 +142,33 @@ impl<T: HtnStateTrait> PrimitiveTask<T> {
 
     /// Checks that every operator has the correct type registry entries and that any fields used
     /// by operators are also present in the state.
-    pub fn verify_operator(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_operator(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         let op_type = self.operator.name();
-        info!("Verifying operator: {op_type}");
+        debug!("Verifying operator: {op_type}");
         let Some(registration) = atr.get_type_by_name(op_type) else {
-            return Err(format!("No type registry entry for operator '{op_type}'"));
+            return Err(HtnErr::Operator {
+                name: op_type.to_string(),
+                params: self.operator.params().to_vec(),
+                details: format!("No type registry entry for operator '{op_type}'"),
+            });
         };
         if registration.data::<ReflectDefault>().is_none() {
-            return Err(format!(
-                "ReflectDefault should be registered, did you forget to add #[reflect(Default)] to {op_type}?"
-            ));
+            return Err(HtnErr::Operator {
+                name: op_type.to_string(),
+                params: self.operator.params().to_vec(),
+                details: format!(
+                    "ReflectDefault should be registered, did you forget to add #[reflect(Default)] to {op_type}?"
+                ),
+            });
         }
         if registration.data::<ReflectHtnOperator>().is_none() {
-            return Err(format!("Operator '{op_type}' is missing Reflection data. Did you forget to derive/implement, AND add #[reflect(HtnOperator)] to {op_type}?"
-            ));
+            return Err(HtnErr::Operator {
+                name: op_type.to_string(),
+                params: self.operator.params().to_vec(),
+                details: format!(
+                    "Operator '{op_type}' is missing Reflection data. Did you forget to derive/implement, AND add #[reflect(HtnOperator)] to {op_type}?"
+                ),
+            });
         }
         let s = state
             .reflect_ref()
@@ -163,9 +177,13 @@ impl<T: HtnStateTrait> PrimitiveTask<T> {
         let state_type = std::any::type_name::<T>();
         for param in self.operator.params().iter() {
             if s.field(param).is_none() {
-                return Err(format!(
-                    "State type `{state_type}` does not have field `{param}`, which is used in the `{op_type}` operator"
-                ));
+                return Err(HtnErr::Operator {
+                    name: op_type.to_string(),
+                    params: self.operator.params().to_vec(),
+                    details: format!(
+                        "State type `{state_type}` does not have field `{param}`, which is used in the `{op_type}` operator"
+                    ),
+                });
             }
         }
         Ok(())

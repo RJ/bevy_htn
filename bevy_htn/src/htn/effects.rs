@@ -1,11 +1,11 @@
 use crate::HtnStateTrait;
 
 use super::*;
+use crate::error::HtnErr;
 use bevy::{
     prelude::*,
     reflect::{DynamicEnum, DynamicVariant, VariantInfo},
 };
-
 // use float_eq::*;
 
 // #[derive_float_eq(
@@ -80,7 +80,7 @@ impl Effect {
         state: &T,
         atr: &AppTypeRegistry,
         is_expected_effect: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), HtnErr> {
         let effect_noun = if is_expected_effect {
             "expected_effect"
         } else {
@@ -89,28 +89,34 @@ impl Effect {
         let reflected = state
             .reflect_ref()
             .as_struct()
-            .map_err(|e| format!("State is not a struct: {e}"))?;
+            .map_err(|e| HtnErr::Condition {
+                syntax: format!("{:?}", self),
+                details: format!("State is not a struct: {e}"),
+            })?;
         match self {
             Effect::SetBool { field, syntax, .. } => {
                 if reflected.field(field).is_none() {
-                    return Err(format!(
-                        "Unknown state field `{field}` for {effect_noun} `{syntax}`"
-                    ));
+                    return Err(HtnErr::Bool {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field}` for {effect_noun}"),
+                    });
                 };
             }
             Effect::SetInt { field, syntax, .. } | Effect::IncrementInt { field, syntax, .. } => {
                 if reflected.field(field).is_none() {
-                    return Err(format!(
-                        "Unknown state field `{field}` for {effect_noun} `{syntax}`"
-                    ));
+                    return Err(HtnErr::Int {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field}` for {effect_noun}"),
+                    });
                 };
             }
             Effect::SetFloat { field, syntax, .. }
             | Effect::IncrementFloat { field, syntax, .. } => {
                 if reflected.field(field).is_none() {
-                    return Err(format!(
-                        "Unknown state field `{field}` for {effect_noun} `{syntax}`"
-                    ));
+                    return Err(HtnErr::Float {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field}` for {effect_noun}"),
+                    });
                 };
             }
             // set a field to the value of another field
@@ -121,44 +127,54 @@ impl Effect {
                 ..
             } => {
                 let Some(field_val) = reflected.field(field) else {
-                    return Err(format!(
-                        "Unknown state field `{field}` for {effect_noun} `{syntax}`"
-                    ));
+                    return Err(HtnErr::Condition {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field}` for {effect_noun}"),
+                    });
                 };
                 let Some(field_src_val) = reflected.field(field_source) else {
-                    return Err(format!(
-                        "Unknown state field `{field_source}` for {effect_noun} `{syntax}`"
-                    ));
+                    return Err(HtnErr::Condition {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field_source}` for {effect_noun}"),
+                    });
                 };
                 // reflected fields known to exist due to above code, so unwrap:
                 let field_type = field_val.get_represented_type_info().unwrap().type_id();
                 let field_src_type = field_src_val.get_represented_type_info().unwrap().type_id();
 
                 if field_type != field_src_type {
-                    return Err(format!(
-                        "An {effect_noun} is trying to set '{field}' to '{field_source}' but they are different types"
-                    ));
+                    return Err(HtnErr::Condition {
+                        syntax: syntax.clone(),
+                        details: format!(
+                            "An {effect_noun} is trying to set '{field}' to '{field_source}' but they are different types"
+                        ),
+                    });
                 }
             }
             Effect::SetNone { field, syntax, .. } => {
                 let Some(val) = reflected.field(field) else {
-                    return Err(format!(
-                        "Unknown state field `{field}` for {effect_noun} `{syntax}`"
-                    ));
+                    return Err(HtnErr::Enum {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field}` for {effect_noun}"),
+                    });
                 };
-                let state_dyn_enum = val
-                    .reflect_ref()
-                    .as_enum()
-                    .map_err(|_e| format!("{effect_noun} field '{field}' should be an enum!"))?;
+                let state_dyn_enum = val.reflect_ref().as_enum().map_err(|_e| HtnErr::Enum {
+                    syntax: syntax.clone(),
+                    details: format!("{effect_noun} field '{field}' should be an enum!"),
+                })?;
                 let Some(enum_info) = state_dyn_enum.get_represented_enum_info() else {
-                    return Err(format!(
-                        "{effect_noun} field '{field}' is not a type registered enum"
-                    ));
+                    return Err(HtnErr::Enum {
+                        syntax: syntax.clone(),
+                        details: format!(
+                            "{effect_noun} field '{field}' is not a type registered enum"
+                        ),
+                    });
                 };
                 if !enum_info.contains_variant("None") || !enum_info.contains_variant("Some") {
-                    return Err(format!(
-                        "{effect_noun} field '{field}' is not an Option enum, for: {syntax}"
-                    ));
+                    return Err(HtnErr::Enum {
+                        syntax: syntax.clone(),
+                        details: format!("{effect_noun} field '{field}' is not an Option enum"),
+                    });
                 }
             }
             Effect::SetEnum {
@@ -169,34 +185,43 @@ impl Effect {
                 ..
             } => {
                 let Some(val) = reflected.field(field) else {
-                    return Err(format!(
-                        "Unknown state field `{field}` for {effect_noun} `{syntax}`"
-                    ));
+                    return Err(HtnErr::Enum {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field}` for {effect_noun}"),
+                    });
                 };
-                let state_dyn_enum = val
-                    .reflect_ref()
-                    .as_enum()
-                    .map_err(|_e| format!("{effect_noun} field '{field}' should be an enum!"))?;
+                let state_dyn_enum = val.reflect_ref().as_enum().map_err(|_e| HtnErr::Enum {
+                    syntax: syntax.clone(),
+                    details: format!("{effect_noun} field '{field}' should be an enum!"),
+                })?;
                 let Some(enum_info) = state_dyn_enum.get_represented_enum_info() else {
-                    return Err(format!(
-                        "{effect_noun} field '{field}' is not a type registered enum"
-                    ));
+                    return Err(HtnErr::Enum {
+                        syntax: syntax.clone(),
+                        details: format!(
+                            "{effect_noun} field '{field}' is not a type registered enum"
+                        ),
+                    });
                 };
                 if !enum_info.contains_variant(enum_variant) {
-                    return Err(format!(
-                        "{effect_noun} enum variant '{enum_variant}' not found, field name: '{field}'"
-                    ));
+                    return Err(HtnErr::Enum {
+                        syntax: syntax.clone(),
+                        details: format!("{effect_noun} enum variant '{enum_variant}' not found, field name: '{field}'"),
+                    });
                 };
                 // let b = val.represents::<Enum>();
                 let Some(type_info) = atr.read().get_type_info(enum_info.type_id()) else {
-                    return Err(format!(
-                        "{effect_noun} enum type '{enum_type}' not found in type registry"
-                    ));
+                    return Err(HtnErr::Enum {
+                        syntax: syntax.clone(),
+                        details: format!(
+                            "{effect_noun} enum type '{enum_type}' not found in type registry"
+                        ),
+                    });
                 };
                 if type_info.type_path_table().ident() != Some(enum_type.as_str()) {
-                    return Err(format!(
-                        "{effect_noun} enum type mismatch when setting field '{field}' to {enum_type}::{enum_variant}"
-                    ));
+                    return Err(HtnErr::Enum {
+                        syntax: syntax.clone(),
+                        details: format!("{effect_noun} enum type mismatch when setting field '{field}' to {enum_type}::{enum_variant}"),
+                    });
                 }
             }
         }
@@ -279,7 +304,7 @@ impl Effect {
                     VariantInfo::Tuple(..) => unimplemented!("Enum tuples not supported"),
                     VariantInfo::Unit(_) => DynamicVariant::Unit,
                 };
-                let mut new_dyn_enum = DynamicEnum::new(enum_variant, variant);
+                let new_dyn_enum = DynamicEnum::new(enum_variant, variant);
                 state_dyn_enum.apply(new_dyn_enum.as_partial_reflect());
             }
             Effect::SetEnum {

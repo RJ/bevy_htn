@@ -403,7 +403,6 @@ fn test_travel_htn() {
 
     // Run the planner with alternative starting states to see different outcomes:
     {
-        warn!("Testing walking state");
         let initial_state = TravelState {
             cash: 10,
             distance_to_park: 1,
@@ -416,7 +415,6 @@ fn test_travel_htn() {
     }
 
     {
-        warn!("Testing taxi state");
         let initial_state = TravelState {
             cash: 10,
             distance_to_park: 5,
@@ -480,7 +478,7 @@ fn test_options() {
     let htn = parse_htn::<State>(src).expect("Failed to parse htn");
     let state = State::default();
     assert!(htn.verify_without_operators(&state, &atr).is_ok());
-    info!("{htn:#?}");
+
     let Some(Task::Primitive(pt)) = &htn.tasks.first() else {
         panic!("Task should exist");
     };

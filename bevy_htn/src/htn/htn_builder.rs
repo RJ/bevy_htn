@@ -1,4 +1,4 @@
-use crate::HtnStateTrait;
+use crate::{error::HtnErr, HtnStateTrait};
 
 use super::*;
 use bevy::prelude::*;
@@ -45,7 +45,7 @@ impl<T: HtnStateTrait> HTN<T> {
     /// avoid any runtime errors executing the HTN.
     ///
     /// Call this after parsing the HTN before trying to use it.
-    pub fn verify_all(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_all(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         self.verify_conditions(state, atr)?;
         self.verify_effects(state, atr)?;
         self.verify_operators(state, atr)?;
@@ -55,7 +55,7 @@ impl<T: HtnStateTrait> HTN<T> {
     /// Verifies that every rust type used in the HTN in reference to the state type is registered.
     /// Doesn't check that operators are registered.
     /// Used in tests that check the planner output without actually running the HTNs.
-    pub fn verify_without_operators(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_without_operators(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         self.verify_conditions(state, atr)?;
         self.verify_effects(state, atr)?;
         Ok(())
@@ -63,7 +63,7 @@ impl<T: HtnStateTrait> HTN<T> {
 
     /// Verifies that every operator has the correct type registry entries and that any fields used
     /// by operators are also present in the state.
-    pub fn verify_operators(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_operators(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         for task in self.tasks.iter() {
             match task {
                 Task::Primitive(primitive) => primitive.verify_operator(state, atr)?,
@@ -73,17 +73,17 @@ impl<T: HtnStateTrait> HTN<T> {
         Ok(())
     }
 
-    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         for task in self.tasks.iter() {
-            info!("Verifying effects for task: {}", task.name());
+            debug!("Verifying effects for task: {}", task.name());
             task.verify_effects(state, atr)?;
         }
         Ok(())
     }
 
-    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         for task in self.tasks.iter() {
-            info!("Verifying conditions for task: {}", task.name());
+            debug!("Verifying conditions for task: {}", task.name());
             task.verify_conditions(state, atr)?;
         }
         Ok(())
@@ -113,7 +113,7 @@ impl<T: HtnStateTrait> HTNBuilder<T> {
 
     /// Verifies that every operator has the correct type registry entries and that any fields used
     /// by operators are also present in the state.
-    pub fn verify_operators(self, state: &T, atr: &AppTypeRegistry) -> Result<Self, String> {
+    pub fn verify_operators(self, state: &T, atr: &AppTypeRegistry) -> Result<Self, HtnErr> {
         for task in self.tasks.iter() {
             match task {
                 Task::Primitive(primitive) => primitive.verify_operator(state, atr)?,
@@ -144,14 +144,14 @@ impl<T: HtnStateTrait> Task<T> {
             Task::Compound(compound) => &compound.name,
         }
     }
-    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_effects(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         match self {
             Task::Primitive(primitive) => primitive.verify_effects(state, atr),
             // compound tasks don't have effects, only primitive tasks do.
             Task::Compound(_compound) => Ok(()),
         }
     }
-    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), String> {
+    pub fn verify_conditions(&self, state: &T, atr: &AppTypeRegistry) -> Result<(), HtnErr> {
         match self {
             Task::Primitive(primitive) => primitive.verify_conditions(state, atr),
             Task::Compound(compound) => compound.verify_conditions(state, atr),

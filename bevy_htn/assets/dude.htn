@@ -18,7 +18,7 @@ compound_task "BeDude" {
         ]
     }
     method "Relaxed and wandering" {
-        preconditions: [mood == Mood::Normal, coin_location is None]
+        preconditions: [mood == Mood::Normal, coin_location == None]
         subtasks: [
             PickDestination,
             MoveToNextDestination,
@@ -26,7 +26,7 @@ compound_task "BeDude" {
         ]
     }
     method "Chasing a coin" {
-        preconditions: [mood == Mood::Normal, coin_location is Some]
+        preconditions: [mood == Mood::Normal, coin_location != None]
         subtasks: [
             MoveToCoin,
         ]
@@ -69,11 +69,11 @@ primitive_task "PickDestination" {
 }
 
 primitive_task "MoveToNextDestination" {
-    // preconditions: [next_destination is Some]
+    // preconditions: [next_destination != None]
     operator: MoveToOperator(next_destination)
 }
 
 primitive_task "MoveToCoin" {
-    preconditions: [coin_location is Some]
+    preconditions: [coin_location != None]
     operator: MoveToOperator(coin_location)
 }

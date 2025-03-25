@@ -1,6 +1,7 @@
 use crate::HtnStateTrait;
 
 use super::*;
+use crate::error::HtnErr;
 use bevy::{
     prelude::*,
     reflect::{DynamicEnum, DynamicVariant, VariantInfo},
@@ -103,17 +104,21 @@ impl HtnCondition {
         state_struct: &dyn Struct,
         field: &str,
         syntax: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), HtnErr> {
         let Some(val) = state_struct.field(field) else {
-            return Err(format!(
-                "Unknown state field `{field}` for condition `{syntax}`"
-            ));
+            return Err(HtnErr::Condition {
+                syntax: syntax.to_string(),
+                details: format!("Unknown state field `{field}` for condition `{syntax}`"),
+            });
         };
         if val.try_downcast_ref::<FieldType>().is_none() {
-            return Err(format!(
-                "State field `{field}` for condition `{syntax}` is not a {}",
-                std::any::type_name::<FieldType>()
-            ));
+            return Err(HtnErr::Condition {
+                syntax: syntax.to_string(),
+                details: format!(
+                    "State field `{field}` for condition `{syntax}` is not a {}",
+                    std::any::type_name::<FieldType>()
+                ),
+            });
         }
         Ok(())
     }
@@ -121,11 +126,14 @@ impl HtnCondition {
         &self,
         state: &T,
         _atr: &AppTypeRegistry,
-    ) -> Result<(), String> {
+    ) -> Result<(), HtnErr> {
         let reflected = state
             .reflect_ref()
             .as_struct()
-            .expect("State is not a struct");
+            .map_err(|_| HtnErr::Condition {
+                syntax: format!("{:?}", self),
+                details: "State is not a struct".to_string(),
+            })?;
         match self {
             HtnCondition::EqualsBool { field, syntax, .. } => {
                 Self::verify_field_type::<bool>(reflected, field, syntax)
@@ -150,32 +158,39 @@ impl HtnCondition {
             }
             HtnCondition::EqualsNone { field, syntax, .. } => {
                 if let Some(val) = reflected.field(field) {
-                    let dyn_enum = val.reflect_ref().as_enum().map_err(|_| {
-                        format!(
+                    let dyn_enum = val.reflect_ref().as_enum().map_err(|_| HtnErr::Enum {
+                        syntax: syntax.to_string(),
+                        details: format!(
                             "Field `{field}` is expected to be an Enum, in condition: `{syntax}`"
-                        )
+                        ),
                     })?;
                     let enum_info = dyn_enum.get_represented_enum_info().ok_or_else(|| {
-                        format!(
-                            "Field `{field}` is expected to be an Option Enum, in condition: `{syntax}`"
-                        )
+                        HtnErr::Enum {
+                            syntax: syntax.to_string(),
+                            details: format!(
+                                "Field `{field}` is expected to be an Option Enum, in condition: `{syntax}`"
+                            ),
+                        }
                     })?;
                     let is_state_field_an_option = enum_info.variant_names().len() == 2
                         && enum_info.variant_names()[0] == "None"
                         && enum_info.variant_names()[1] == "Some";
                     if !is_state_field_an_option {
-                        return Err(format!(
-                            "Field `{field}` is expected to be an Option, in condition: `{syntax}`"
-                        ));
+                        return Err(HtnErr::Enum {
+                            syntax: syntax.to_string(),
+                            details: format!(
+                                "Field `{field}` is expected to be an Option, in condition: `{syntax}`"
+                            ),
+                        });
                     }
                     Ok(())
                 } else {
-                    Err(format!(
-                        "Unknown state field `{field}` for condition `{syntax}`"
-                    ))
+                    Err(HtnErr::Condition {
+                        syntax: syntax.to_string(),
+                        details: format!("Unknown state field `{field}` for condition `{syntax}`"),
+                    })
                 }
             }
-
             HtnCondition::EqualsEnum {
                 field,
                 enum_type,
@@ -185,34 +200,52 @@ impl HtnCondition {
             } => {
                 if let Some(state_val) = reflected.field(field) {
                     let dyn_enum = state_val.reflect_ref().as_enum().map_err(|_| {
-                        format!(
-                            "Field `{field}` is expected to be an Enum, in condition: `{syntax}`"
-                        )
+                        HtnErr::Enum {
+                            syntax: syntax.to_string(),
+                            details: format!(
+                                "Field `{field}` is expected to be an Enum, in condition: `{syntax}`"
+                            ),
+                        }
                     })?;
                     let enum_info = dyn_enum
                         .get_represented_enum_info()
-                        .expect("Field is not an enum");
+                        .ok_or_else(|| HtnErr::Enum {
+                            syntax: syntax.to_string(),
+                            details: format!(
+                                "Field `{field}` is expected to be an Enum, in condition: `{syntax}`"
+                            ),
+                        })?;
                     let Some(variant) = enum_info.variant(enum_variant) else {
-                        return Err(format!(
-                            "Variant '{enum_type}::{enum_variant}' not found in enum for condition: '{syntax}'"
-                        ));
+                        return Err(HtnErr::Enum {
+                            syntax: syntax.to_string(),
+                            details: format!(
+                                "Variant '{enum_type}::{enum_variant}' not found in enum for condition: '{syntax}'"
+                            ),
+                        });
                     };
                     match variant {
                         VariantInfo::Struct(..) | VariantInfo::Tuple(..) => {
-                            return Err(format!(
-                            "Struct enums and Tuple enums are not supported. condition: `{syntax}`"
-                        ))
+                            return Err(HtnErr::Enum {
+                                syntax: syntax.to_string(),
+                                details: format!(
+                                    "Struct enums and Tuple enums are not supported. condition: `{syntax}`"
+                                ),
+                            });
                         }
                         VariantInfo::Unit(_) => (),
                     }
                     if enum_info.type_path_table().ident() != Some(enum_type) {
-                        return Err(format!("Enum type mismatch for condition: `{syntax}`"));
+                        return Err(HtnErr::Enum {
+                            syntax: syntax.to_string(),
+                            details: format!("Enum type mismatch for condition: `{syntax}`"),
+                        });
                     }
                     Ok(())
                 } else {
-                    Err(format!(
-                        "Unknown state field `{field}` for condition `{syntax}`"
-                    ))
+                    Err(HtnErr::Condition {
+                        syntax: syntax.to_string(),
+                        details: format!("Unknown state field `{field}` for condition `{syntax}`"),
+                    })
                 }
             }
             HtnCondition::EqualsIdentifier {
@@ -234,14 +267,16 @@ impl HtnCondition {
                 ..
             } => {
                 let Some(val1) = reflected.field(field1) else {
-                    return Err(format!(
-                        "Unknown state field `{field1}` for condition `{syntax}`"
-                    ));
+                    return Err(HtnErr::Condition {
+                        syntax: syntax.to_string(),
+                        details: format!("Unknown state field `{field1}` for condition `{syntax}`"),
+                    });
                 };
                 let Some(val2) = reflected.field(field2) else {
-                    return Err(format!(
-                        "Unknown state field `{field2}` for condition `{syntax}`"
-                    ));
+                    return Err(HtnErr::Condition {
+                        syntax: syntax.to_string(),
+                        details: format!("Unknown state field `{field2}` for condition `{syntax}`"),
+                    });
                 };
 
                 // reflected fields known to exist due to above code, so unwrap:
@@ -249,9 +284,12 @@ impl HtnCondition {
                 let val2_type = val2.get_represented_type_info().unwrap().type_id();
 
                 if val1_type != val2_type {
-                    return Err(format!(
-                        "Fields `{field1}` and `{field2}` are not of the same type for condition `{syntax}`"
-                    ));
+                    return Err(HtnErr::Condition {
+                        syntax: syntax.to_string(),
+                        details: format!(
+                            "Fields `{field1}` and `{field2}` are not of the same type for condition `{syntax}`"
+                        ),
+                    });
                 }
                 Ok(())
             }
@@ -544,7 +582,11 @@ impl HtnCondition {
                         return false;
                     }
                     let var_name = dyn_enum.variant_name();
-                    var_name == "None" && !*notted
+                    if *notted {
+                        var_name == "Some"
+                    } else {
+                        var_name == "None"
+                    }
                 } else {
                     false
                 }
@@ -604,6 +646,7 @@ mod tests {
                     e1 > e2,
                     floatyness > 2.0,
                     optfloat == None,
+                    optfloat != None,
                 ]
                 effects: [
                 ]
@@ -672,6 +715,11 @@ mod tests {
                     field: "optfloat".to_string(),
                     notted: false,
                     syntax: "optfloat == None".to_string(),
+                },
+                HtnCondition::EqualsNone {
+                    field: "optfloat".to_string(),
+                    notted: true,
+                    syntax: "optfloat != None".to_string(),
                 },
             ]
         );
@@ -777,6 +825,7 @@ mod tests {
         assert!(condition.evaluate(&state, &atr));
         let state2 = State {
             floatyness: 2.0,
+            optfloat: Some(2.0),
             ..state.clone()
         };
         assert!(condition.evaluate(&state2, &atr));
@@ -787,5 +836,13 @@ mod tests {
             syntax: "optfloat == None".to_string(),
         };
         assert!(condition.evaluate(&state, &atr));
+
+        let condition = HtnCondition::EqualsNone {
+            field: "optfloat".to_string(),
+            notted: true,
+            syntax: "optfloat != None".to_string(),
+        };
+        assert!(!condition.evaluate(&state, &atr));
+        assert!(condition.evaluate(&state2, &atr));
     }
 }

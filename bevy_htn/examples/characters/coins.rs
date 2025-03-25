@@ -76,7 +76,10 @@ fn check_coin_collisions(
                 < COIN_COLLECT_DIST
             {
                 // warn!("Coin collision!");
-                commands.entity(coin_e).remove::<Coin>().insert(CoinGhost);
+                commands
+                    .entity(coin_e)
+                    .remove::<Coin>()
+                    .try_insert(CoinGhost);
                 commands.trigger_targets(CoinCollected, player_e);
             }
         }
@@ -84,7 +87,7 @@ fn check_coin_collisions(
     for (coin_e, mut coin_transform) in q_coin_ghosts.iter_mut() {
         coin_transform.translation.y = coin_transform.translation.y.lerp(300.0, time.delta_secs());
         if coin_transform.translation.y > 25.0 {
-            commands.entity(coin_e).despawn_recursive();
+            commands.entity(coin_e).try_despawn_recursive();
         }
     }
 }

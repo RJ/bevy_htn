@@ -304,7 +304,7 @@ fn spin_system(
     mut q_dude: Query<&mut Transform, With<Dude>>,
     time: Res<Time>,
 ) {
-    for (ctx, spin) in q_behave.iter() {
+    for (ctx, _spin) in q_behave.iter() {
         let mut dude_transform = q_dude.get_mut(ctx.target_entity()).expect("Dude not found");
         dude_transform.rotation = Quat::from_rotation_y(time.elapsed_secs() * 10.0);
     }

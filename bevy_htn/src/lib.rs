@@ -1,4 +1,5 @@
 mod dsl;
+mod error;
 mod executor;
 mod htn;
 mod htn_assets;
@@ -26,6 +27,7 @@ pub mod prelude {
     pub use super::planner::*;
     pub use super::reflect_operator::*;
     pub use super::HtnPlugin;
+    pub use crate::error::HtnErr;
     pub use bevy_behave::prelude::*;
     pub use bevy_htn_macros::HtnOperator;
 }
