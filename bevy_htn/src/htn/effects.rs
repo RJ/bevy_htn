@@ -6,7 +6,18 @@ use bevy::{
     reflect::{DynamicEnum, DynamicVariant, VariantInfo},
 };
 
-#[derive(Clone, Debug, Reflect, PartialEq, Eq)]
+// use float_eq::*;
+
+// #[derive_float_eq(
+//     ulps_tol = "PointUlps",
+//     ulps_tol_derive = "Clone, Copy, Debug, PartialEq, Eq",
+//     debug_ulps_diff = "PointDebugUlpsDiff",
+//     debug_ulps_diff_derive = "Clone, Copy, Reflect, Debug, PartialEq, Eq"
+// )]
+// #[derive(Debug, PartialEq, Clone, Copy, Reflect)]
+// pub struct Float(pub f32);
+
+#[derive(Clone, Debug, Reflect, PartialEq)]
 pub enum Effect {
     SetBool {
         field: String,
@@ -18,6 +29,11 @@ pub enum Effect {
         value: i32,
         syntax: String,
     },
+    SetFloat {
+        field: String,
+        value: f32,
+        syntax: String,
+    },
     // sets state.field to the value of state.field_source, so long as they are equal types.
     SetIdentifier {
         field: String,
@@ -27,6 +43,11 @@ pub enum Effect {
     IncrementInt {
         field: String,
         by: i32,
+        syntax: String,
+    },
+    IncrementFloat {
+        field: String,
+        by: f32,
         syntax: String,
     },
     SetEnum {
@@ -50,6 +71,8 @@ impl Effect {
             Effect::IncrementInt { syntax, .. } => syntax,
             Effect::SetEnum { syntax, .. } => syntax,
             Effect::SetNone { syntax, .. } => syntax,
+            Effect::SetFloat { syntax, .. } => syntax,
+            Effect::IncrementFloat { syntax, .. } => syntax,
         }
     }
     pub fn verify_types<T: HtnStateTrait>(
@@ -76,6 +99,14 @@ impl Effect {
                 };
             }
             Effect::SetInt { field, syntax, .. } | Effect::IncrementInt { field, syntax, .. } => {
+                if reflected.field(field).is_none() {
+                    return Err(format!(
+                        "Unknown state field `{field}` for {effect_noun} `{syntax}`"
+                    ));
+                };
+            }
+            Effect::SetFloat { field, syntax, .. }
+            | Effect::IncrementFloat { field, syntax, .. } => {
                 if reflected.field(field).is_none() {
                     return Err(format!(
                         "Unknown state field `{field}` for {effect_noun} `{syntax}`"
@@ -196,10 +227,28 @@ impl Effect {
                     panic!("Field {field} does not exist in the state");
                 }
             }
+            Effect::SetFloat { field, value, .. } => {
+                if let Some(val) = reflected.field_mut(field) {
+                    if let Some(f) = val.try_downcast_mut::<f32>() {
+                        *f = *value;
+                    }
+                } else {
+                    panic!("Field {field} does not exist in the state");
+                }
+            }
             Effect::IncrementInt { field, by, .. } => {
                 if let Some(val) = reflected.field_mut(field) {
                     if let Some(i) = val.try_downcast_mut::<i32>() {
                         *i += *by;
+                    }
+                } else {
+                    panic!("Field {field} does not exist in the state");
+                }
+            }
+            Effect::IncrementFloat { field, by, .. } => {
+                if let Some(val) = reflected.field_mut(field) {
+                    if let Some(f) = val.try_downcast_mut::<f32>() {
+                        *f += *by;
                     }
                 } else {
                     panic!("Field {field} does not exist in the state");
@@ -292,6 +341,7 @@ mod tests {
         #[reflect(Default, Resource)]
         struct State {
             energy: i32,
+            floatyness: f32,
             happy: bool,
             location: Location,
             e1: i32,
@@ -314,6 +364,7 @@ mod tests {
             e1 = e2,
             energy -= 50,
             location = Location::Park,
+            floatyness = 2.0,
         ]
     }
     "#;
@@ -357,11 +408,17 @@ mod tests {
                     enum_variant: "Park".to_string(),
                     syntax: "location = Location::Park".to_string(),
                 },
+                Effect::SetFloat {
+                    field: "floatyness".to_string(),
+                    value: 2.0,
+                    syntax: "floatyness = 2.0".to_string(),
+                },
             ]
         );
 
         let initial_state = State {
             energy: 10,
+            floatyness: 1.0,
             happy: false,
             location: Location::Home,
             e1: 1,
@@ -432,6 +489,16 @@ mod tests {
         };
         effect.apply(&mut state, &atr);
         assert_eq!(state.opt, None);
+
+        // deliberately using powers of two here to avoid float point shennanigans
+        let mut state = initial_state.clone();
+        let effect = Effect::SetFloat {
+            field: "floatyness".to_string(),
+            value: 4.0,
+            syntax: "floatyness = 4.0".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.floatyness, 4.0);
 
         // there is no SetSome yet. can maybe do it be constructing the default value of the Option Some,
         // but that should probably be restricted to expected_effects. bit unpleasant.

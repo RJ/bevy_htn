@@ -27,7 +27,8 @@ operator_param     = @{ identifier }
 
 condition = { option_condition | value_condition }
 
-value_condition  = { identifier ~ operator ~ (value | enum_value | identifier) }
+value_condition  = { identifier ~ operator ~ (value | identifier) }
+
 operator   = _{ op_gte  | op_gt | op_lte | op_lt | op_eq | op_neq }
 op_gte = {">="}
 op_gt  = {">"}
@@ -35,6 +36,11 @@ op_lte = {"<="}
 op_lt  = {"<"}
 op_eq  = {"=="}
 op_neq = {"!="}
+
+// effect_operator = _{ op_assign | op_assign_inc | op_assign_dec }
+//op_assign = {"="}
+//op_assign_inc = {"+="}
+//op_assign_dec = {"-="}
 
 op_is  = {"is"}
 
@@ -44,18 +50,24 @@ optcond_val = _{ optcond_none | optcond_some }
 
 option_condition = { identifier ~ op_is ~ optcond_val }
 
-effect     = { set_effect | inc_effect | dec_effect }
-// greedy parser, so check for enum_value first otherwise identifier is found before the ::
-set_effect = { identifier ~ "=" ~ (value | enum_value | identifier) }
-inc_effect = { identifier ~ "+=" ~ value }
-dec_effect = { identifier ~ "-=" ~ value }
+effect     = { set_effect_literal | set_effect_identifier | set_effect_inc_literal | set_effect_dec_literal }
+
+set_effect_literal = { identifier ~ "=" ~ value }
+set_effect_identifier = { identifier ~ "=" ~ identifier }
+set_effect_inc_literal = { identifier ~ "+=" ~ value }
+set_effect_dec_literal = { identifier ~ "-=" ~ value }
 
 identifier = @{ (ASCII_ALPHANUMERIC | "_")+ }
+
+// greedy parser, so check for enum_value first otherwise identifier is found before the ::
+// similarly, check for float_value before value
+value      = _{ enum_value | float_value | int_value | bool_value }
+
 enum_value = @{ identifier ~ "::" ~ identifier }
-value      = @{ ("true" | "false") | "-"? ~ ASCII_DIGIT+ }
-//opt_value  = @{ (none_value | some_value) }
-//none_value = @{ "None" }
-//some_value = @{ "Some(" ~ (none_value | value | enum_value | identifier) ~ ")" }
+float_value = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+int_value = @{ "-"? ~ ASCII_DIGIT+ }
+bool_value = @{ "true" | "false" }
+
 STRING     = @{ "\"" ~ ((!"\"" ~ ANY))* ~ "\"" }
 
 

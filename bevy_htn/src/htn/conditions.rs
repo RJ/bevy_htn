@@ -6,7 +6,7 @@ use bevy::{
     reflect::{DynamicEnum, DynamicVariant, VariantInfo},
 };
 
-#[derive(Clone, Debug, Reflect, PartialEq, Eq)]
+#[derive(Clone, Debug, Reflect, PartialEq)]
 pub enum HtnCondition {
     IsNone {
         field: String,
@@ -28,6 +28,12 @@ pub enum HtnCondition {
         orequals: bool,
         syntax: String,
     },
+    GreaterThanFloat {
+        field: String,
+        threshold: f32,
+        orequals: bool,
+        syntax: String,
+    },
     GreaterThanIdentifier {
         field: String,
         other_field: String,
@@ -37,6 +43,12 @@ pub enum HtnCondition {
     LessThanInt {
         field: String,
         threshold: i32,
+        orequals: bool,
+        syntax: String,
+    },
+    LessThanFloat {
+        field: String,
+        threshold: f32,
         orequals: bool,
         syntax: String,
     },
@@ -56,6 +68,12 @@ pub enum HtnCondition {
     EqualsInt {
         field: String,
         value: i32,
+        notted: bool,
+        syntax: String,
+    },
+    EqualsFloat {
+        field: String,
+        value: f32,
         notted: bool,
         syntax: String,
     },
@@ -80,6 +98,9 @@ impl HtnCondition {
             HtnCondition::EqualsIdentifier { syntax, .. } => syntax.clone(),
             HtnCondition::IsNone { syntax, .. } => syntax.clone(),
             HtnCondition::IsSome { syntax, .. } => syntax.clone(),
+            HtnCondition::EqualsFloat { syntax, .. } => syntax.clone(),
+            HtnCondition::GreaterThanFloat { syntax, .. } => syntax.clone(),
+            HtnCondition::LessThanFloat { syntax, .. } => syntax.clone(),
         }
     }
     fn verify_field_type<FieldType: 'static>(
@@ -121,6 +142,15 @@ impl HtnCondition {
             }
             HtnCondition::EqualsInt { field, syntax, .. } => {
                 Self::verify_field_type::<i32>(reflected, field, syntax)
+            }
+            HtnCondition::EqualsFloat { field, syntax, .. } => {
+                Self::verify_field_type::<f32>(reflected, field, syntax)
+            }
+            HtnCondition::GreaterThanFloat { field, syntax, .. } => {
+                Self::verify_field_type::<f32>(reflected, field, syntax)
+            }
+            HtnCondition::LessThanFloat { field, syntax, .. } => {
+                Self::verify_field_type::<f32>(reflected, field, syntax)
             }
             HtnCondition::IsNone { field, syntax, .. }
             | HtnCondition::IsSome { field, syntax, .. } => {
@@ -258,14 +288,54 @@ impl HtnCondition {
                     false
                 }
             }
-            HtnCondition::GreaterThanInt {
+            HtnCondition::EqualsFloat {
+                field,
+                value,
+                notted,
+                ..
+            } => {
+                if let Some(val) = reflected.field(field) {
+                    if let Some(f) = val.try_downcast_ref::<f32>() {
+                        if *notted {
+                            *f != *value
+                        } else {
+                            *f == *value
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            HtnCondition::GreaterThanFloat {
                 field,
                 threshold,
                 orequals,
                 ..
             } => {
                 if let Some(val) = reflected.field(field) {
-                    if let Some(i) = val.try_downcast_ref::<i32>() {
+                    if let Some(f) = val.try_downcast_ref::<f32>() {
+                        if *orequals {
+                            *f >= *threshold
+                        } else {
+                            *f > *threshold
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            HtnCondition::LessThanFloat {
+                field,
+                threshold,
+                orequals,
+                ..
+            } => {
+                if let Some(val) = reflected.field(field) {
+                    if let Some(i) = val.try_downcast_ref::<f32>() {
                         if *orequals {
                             *i >= *threshold
                         } else {
@@ -290,6 +360,26 @@ impl HtnCondition {
                             *i <= *threshold
                         } else {
                             *i < *threshold
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+            HtnCondition::GreaterThanInt {
+                field,
+                threshold,
+                orequals,
+                ..
+            } => {
+                if let Some(val) = reflected.field(field) {
+                    if let Some(f) = val.try_downcast_ref::<i32>() {
+                        if *orequals {
+                            *f >= *threshold
+                        } else {
+                            *f > *threshold
                         }
                     } else {
                         false
@@ -499,6 +589,7 @@ mod tests {
         #[reflect(Default, Resource)]
         struct State {
             energy: i32,
+            floatyness: f32,
             happy: bool,
             location: Location,
             e1: i32,
@@ -519,6 +610,7 @@ mod tests {
                     happy == false,
                     e1 != e2,
                     e1 > e2,
+                    floatyness > 2.0,
                 ]
                 effects: [
                 ]
@@ -577,6 +669,12 @@ mod tests {
                     orequals: false,
                     syntax: "e1 > e2".to_string(),
                 },
+                HtnCondition::GreaterThanFloat {
+                    field: "floatyness".to_string(),
+                    threshold: 2.0,
+                    orequals: false,
+                    syntax: "floatyness > 2.0".to_string(),
+                },
             ]
         );
         assert_eq!(pt.name, "Conditions Test");
@@ -590,6 +688,7 @@ mod tests {
             location: Location::Home,
             e1: 1,
             e2: 2,
+            floatyness: 2.0,
         };
 
         let condition = HtnCondition::EqualsBool {
@@ -665,6 +764,20 @@ mod tests {
         assert!(!condition.evaluate(&state, &atr));
         let state2 = State {
             e1: 3,
+            ..state.clone()
+        };
+        assert!(condition.evaluate(&state2, &atr));
+
+        // deliberately using powers of two here to avoid floating point shennanigans
+        let condition = HtnCondition::EqualsFloat {
+            field: "floatyness".to_string(),
+            value: 2.0,
+            notted: false,
+            syntax: "floatyness == 2.0".to_string(),
+        };
+        assert!(condition.evaluate(&state, &atr));
+        let state2 = State {
+            floatyness: 2.0,
             ..state.clone()
         };
         assert!(condition.evaluate(&state2, &atr));

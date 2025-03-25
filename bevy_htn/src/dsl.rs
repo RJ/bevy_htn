@@ -10,12 +10,6 @@ use pest_derive::Parser;
 #[grammar = "src/htn.pest"]
 pub struct HtnParser;
 
-// inner = [Pair { rule: value_condition, span: Span { str: "energy > 10", start: 228, end: 239 }
-// inner: [Pair { rule: identifier, span: Span { str: "energy", start: 228, end: 234 }, inner: [] },
-// Pair { rule: operator, span: Span { str: ">", start: 235, end: 236 }, inner: [] },
-// Pair { rule: value, span: Span { str: "10", start: 237, end: 239 }, inner: [] }] }]
-// ' panicked at bevy_htn/src/dsl.rs2025-03-21T21:40:04.408699Z  INFO bevy_htn::dsl: field = energy > 10
-
 fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
     let op = pair.into_inner().next().unwrap();
     let rule = op.as_rule();
@@ -36,10 +30,14 @@ fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
     let val_rule = value.as_rule(); // Rule::value
     let val_str = value.as_str(); // 10
 
-    match op {
-        // >, >= of value
-        Rule::op_gte | Rule::op_gt if val_rule == Rule::value => {
-            let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
+    let notted = op == Rule::op_neq;
+
+    match (op, val_rule) {
+        // >, >= of INT value
+        (Rule::op_gte | Rule::op_gt, Rule::int_value) => {
+            let Ok(threshold) = val_str.parse::<i32>() else {
+                panic!("Invalid integer in condition: {val_str}");
+            };
             HtnCondition::GreaterThanInt {
                 field,
                 threshold,
@@ -47,9 +45,11 @@ fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
                 syntax,
             }
         }
-        // <, <= of value
-        Rule::op_lte | Rule::op_lt if val_rule == Rule::value => {
-            let threshold = val_str.parse::<i32>().expect("Invalid number in condition");
+        // <, <= of INT value
+        (Rule::op_lte | Rule::op_lt, Rule::int_value) => {
+            let Ok(threshold) = val_str.parse::<i32>() else {
+                panic!("Invalid integer in condition: {val_str}");
+            };
             HtnCondition::LessThanInt {
                 field,
                 threshold,
@@ -57,29 +57,46 @@ fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
                 syntax,
             }
         }
-        // >, >= of identifier
-        Rule::op_gte | Rule::op_gt if val_rule == Rule::identifier => {
-            HtnCondition::GreaterThanIdentifier {
+        // >, >= of F32 value
+        (Rule::op_gte | Rule::op_gt, Rule::float_value) => {
+            let Ok(threshold) = val_str.parse::<f32>() else {
+                panic!("Invalid float in condition: {val_str}");
+            };
+            HtnCondition::GreaterThanFloat {
                 field,
-                other_field: val_str.to_string(),
+                threshold,
                 orequals: op == Rule::op_gte,
                 syntax,
             }
         }
-        // <, <= of identifier
-        Rule::op_lte | Rule::op_lt if val_rule == Rule::identifier => {
-            HtnCondition::LessThanIdentifier {
+        // <, <= of F32 value
+        (Rule::op_lte | Rule::op_lt, Rule::float_value) => {
+            let Ok(threshold) = val_str.parse::<f32>() else {
+                panic!("Invalid float in condition: {val_str}");
+            };
+            HtnCondition::LessThanFloat {
                 field,
-                other_field: val_str.to_string(),
+                threshold,
                 orequals: op == Rule::op_lte,
                 syntax,
             }
         }
+        // >, >= of identifier
+        (Rule::op_gte | Rule::op_gt, Rule::identifier) => HtnCondition::GreaterThanIdentifier {
+            field,
+            other_field: val_str.to_string(),
+            orequals: op == Rule::op_gte,
+            syntax,
+        },
+        // <, <= of identifier
+        (Rule::op_lte | Rule::op_lt, Rule::identifier) => HtnCondition::LessThanIdentifier {
+            field,
+            other_field: val_str.to_string(),
+            orequals: op == Rule::op_lte,
+            syntax,
+        },
         // equality of bool
-        Rule::op_eq | Rule::op_neq
-            if val_rule == Rule::value && (val_str == "true" || val_str == "false") =>
-        {
-            let notted = op == Rule::op_neq;
+        (Rule::op_eq | Rule::op_neq, Rule::bool_value) => {
             let bool_val = match val_str {
                 "true" => true,
                 "false" => false,
@@ -93,8 +110,7 @@ fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
             }
         }
         // equality of i32
-        Rule::op_eq | Rule::op_neq if val_rule == Rule::value => {
-            let notted = op == Rule::op_neq;
+        (Rule::op_eq | Rule::op_neq, Rule::int_value) => {
             if let Ok(int_val) = val_str.parse::<i32>() {
                 HtnCondition::EqualsInt {
                     field,
@@ -106,9 +122,21 @@ fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
                 panic!("Invalid integer value: {}", val_str);
             }
         }
+        // equality of f32
+        (Rule::op_eq | Rule::op_neq, Rule::float_value) => {
+            if let Ok(float_val) = val_str.parse::<f32>() {
+                HtnCondition::EqualsFloat {
+                    field,
+                    value: float_val,
+                    notted,
+                    syntax,
+                }
+            } else {
+                panic!("Invalid float value: {}", val_str);
+            }
+        }
         // equality of enum
-        Rule::op_eq | Rule::op_neq if val_rule == Rule::enum_value => {
-            let notted = op == Rule::op_neq;
+        (Rule::op_eq | Rule::op_neq, Rule::enum_value) => {
             // safety: parser ensures a well formed enum containing ::
             let parts: Vec<&str> = val_str.split("::").collect();
             let enum_type = parts[0].to_string();
@@ -122,15 +150,12 @@ fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
             }
         }
         // equality of identifier
-        Rule::op_eq | Rule::op_neq if val_rule == Rule::identifier => {
-            let notted = op == Rule::op_neq;
-            HtnCondition::EqualsIdentifier {
-                field,
-                other_field: val_str.to_string(),
-                notted,
-                syntax,
-            }
-        }
+        (Rule::op_eq | Rule::op_neq, Rule::identifier) => HtnCondition::EqualsIdentifier {
+            field,
+            other_field: val_str.to_string(),
+            notted,
+            syntax,
+        },
 
         _ => panic!("Unsupported operator: {:?}", op),
     }
@@ -153,65 +178,71 @@ fn parse_option_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
 
 fn parse_effect(pair: Pair<Rule>) -> Effect {
     let syntax = pair.as_str().to_string();
-    let inner_pair = pair.into_inner().next().unwrap();
-    let rule = inner_pair.as_rule();
-    match rule {
-        Rule::set_effect => {
-            let mut parts = inner_pair.into_inner();
-            let field = parts.next().unwrap().as_str().to_string();
-            let val_str = parts.next().unwrap().as_str();
-
-            if val_str == "true" || val_str == "false" {
-                let bool_val = val_str == "true";
-                Effect::SetBool {
-                    field,
-                    value: bool_val,
-                    syntax,
-                }
-            } else if let Ok(int_val) = val_str.parse::<i32>() {
-                Effect::SetInt {
-                    field,
-                    value: int_val,
-                    syntax,
-                }
-            } else if val_str.contains("::") {
-                let parts: Vec<&str> = val_str.split("::").collect();
-                let enum_type = parts[0].to_string();
-                let enum_variant = parts[1].to_string();
-                Effect::SetEnum {
-                    field,
-                    enum_type,
-                    enum_variant,
-                    syntax,
-                }
-            } else {
-                let identifier = val_str.to_string();
-                Effect::SetIdentifier {
-                    field,
-                    field_source: identifier,
-                    syntax,
-                }
+    // let inner_pair = pair.into_inner().next().unwrap();
+    let effect_pair = pair.into_inner().next().unwrap();
+    let effect_rule = effect_pair.as_rule(); // Rule::set_effect / inc_effect / etc
+    let mut parts = effect_pair.into_inner();
+    // EG: foo = 10
+    // the LHS state field name, ie "foo"
+    let field = parts.next().unwrap().as_str().to_string();
+    // the RHS:
+    let val_pair = parts.next().unwrap();
+    let val_rule = val_pair.as_rule(); // Rule::int_value
+    let val_str = val_pair.as_str(); // "10"
+    match (effect_rule, val_rule) {
+        (Rule::set_effect_literal, Rule::bool_value) => Effect::SetBool {
+            field,
+            value: val_str == "true",
+            syntax,
+        },
+        (Rule::set_effect_literal, Rule::int_value) => {
+            let int_val = val_str
+                .parse::<i32>()
+                .expect("Invalid integer in set effect");
+            Effect::SetInt {
+                field,
+                value: int_val,
+                syntax,
             }
         }
-        Rule::inc_effect | Rule::dec_effect => {
-            let mut parts = inner_pair.into_inner();
-            let field = parts.next().unwrap().as_str().to_string();
-            let amt_str = parts.next().unwrap().as_str();
-            let amount = amt_str
-                .parse::<i32>()
-                .expect("Invalid integer in inc effect");
-            if rule == Rule::dec_effect {
-                Effect::IncrementInt {
-                    field,
-                    by: -amount,
-                    syntax,
-                }
-            } else {
-                Effect::IncrementInt {
-                    field,
-                    by: amount,
-                    syntax,
-                }
+        (Rule::set_effect_literal, Rule::float_value) => {
+            let float_val = val_str.parse::<f32>().expect("Invalid f32 in set effect");
+            Effect::SetFloat {
+                field,
+                value: float_val,
+                syntax,
+            }
+        }
+        (Rule::set_effect_literal, Rule::enum_value) => {
+            let parts: Vec<&str> = val_str.split("::").collect();
+            let enum_type = parts[0].to_string();
+            let enum_variant = parts[1].to_string();
+            Effect::SetEnum {
+                field,
+                enum_type,
+                enum_variant,
+                syntax,
+            }
+        }
+        (Rule::set_effect_identifier, Rule::identifier) => Effect::SetIdentifier {
+            field,
+            field_source: val_str.to_string(),
+            syntax,
+        },
+        (Rule::set_effect_inc_literal, Rule::int_value) => {
+            let val = val_str.parse::<i32>().expect("Invalid integer");
+            Effect::IncrementInt {
+                field,
+                by: val,
+                syntax,
+            }
+        }
+        (Rule::set_effect_dec_literal, Rule::int_value) => {
+            let val = val_str.parse::<i32>().expect("Invalid integer");
+            Effect::IncrementInt {
+                field,
+                by: -val,
+                syntax,
             }
         }
         _ => panic!("Unsupported effect type"),

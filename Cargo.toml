@@ -36,8 +36,9 @@ pest_derive = "2.7.15"
 thiserror = "2.0.12"
 bevy-inspector-egui = "0.29"
 bevy_pancam = {version = "0.16.0", features = ["bevy_egui"]}
-bevy_behave = "0.2.1"
+bevy_behave = "0.2.2"
 rand = "0.9.0"
+float_eq = {version = "1.0.1", features = ["derive"]}
 
 [patch.crates-io]
 bevy_behave = { path = "../bevy_behave" }
