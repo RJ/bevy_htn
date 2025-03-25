@@ -28,7 +28,7 @@ impl<T: HtnStateTrait> AssetLoader for HtnAssetLoader<T> {
         reader.read_to_string(&mut value).await?;
         // info!("Loaded htn: {}", value);
         Ok(HtnAsset {
-            htn: parse_htn::<T>(&value),
+            htn: parse_htn::<T>(&value).expect("Failed to parse htn"),
             seed: rand::rng().random(),
         })
     }

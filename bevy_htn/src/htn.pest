@@ -25,9 +25,7 @@ operator_statement =  { "operator:" ~ operator_def ~ EOL  }
 operator_def       =  { identifier ~ ("(" ~ operator_param* ~ ")")? }
 operator_param     = @{ identifier }
 
-condition = { option_condition | value_condition }
-
-value_condition  = { identifier ~ operator ~ (value | identifier) }
+condition  = { identifier ~ operator ~ (value | identifier) }
 
 operator   = _{ op_gte  | op_gt | op_lte | op_lt | op_eq | op_neq }
 op_gte = {">="}
@@ -44,11 +42,11 @@ op_neq = {"!="}
 
 op_is  = {"is"}
 
-optcond_none = @{ "None" }
-optcond_some = @{ "Some" }
-optcond_val = _{ optcond_none | optcond_some }
+//optcond_none = @{ "None" }
+//optcond_some = @{ "Some" }
+//optcond_val = _{ optcond_none | optcond_some }
 
-option_condition = { identifier ~ op_is ~ optcond_val }
+//option_condition = { identifier ~ op_is ~ optcond_val }
 
 effect     = { set_effect_literal | set_effect_identifier | set_effect_inc_literal | set_effect_dec_literal }
 
@@ -61,12 +59,13 @@ identifier = @{ (ASCII_ALPHANUMERIC | "_")+ }
 
 // greedy parser, so check for enum_value first otherwise identifier is found before the ::
 // similarly, check for float_value before value
-value      = _{ enum_value | float_value | int_value | bool_value }
+value      = _{ enum_value | float_value | int_value | bool_value | none_value }
 
 enum_value = @{ identifier ~ "::" ~ identifier }
 float_value = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 int_value = @{ "-"? ~ ASCII_DIGIT+ }
 bool_value = @{ "true" | "false" }
+none_value = @{ "None" }
 
 STRING     = @{ "\"" ~ ((!"\"" ~ ANY))* ~ "\"" }
 

@@ -170,7 +170,7 @@ fn test_parser() {
         }
     }
     "#;
-    let htn = parse_htn::<TestState>(src);
+    let htn = parse_htn::<TestState>(src).expect("Failed to parse htn");
     assert_eq!(htn.version(), "0.1.0");
     assert_eq!(htn.tasks.len(), 2);
     let Task::Primitive(task1) = &htn.tasks[0] else {
@@ -391,7 +391,7 @@ fn test_travel_htn() {
         atr.register::<RideTaxiOperator>();
         atr.register::<PayTaxiOperator>();
     }
-    let htn = parse_htn::<TravelState>(src);
+    let htn = parse_htn::<TravelState>(src).expect("Failed to parse htn");
 
     // verify via reflection that any types used in the htn are registered:
     match htn.verify_all(&TravelState::default(), &atr) {
@@ -465,7 +465,7 @@ fn test_options() {
     primitive_task "Conditions Test" {
         operator: DummyOperator
         preconditions: [
-            optnum1 is None, optnum2 is Some
+            optnum1 == None, optnum2 != None
         ]
         effects: [
         ]
@@ -477,7 +477,7 @@ fn test_options() {
         atr.register::<State>();
         atr.register::<Location>();
     }
-    let htn = parse_htn::<State>(src);
+    let htn = parse_htn::<State>(src).expect("Failed to parse htn");
     let state = State::default();
     assert!(htn.verify_without_operators(&state, &atr).is_ok());
     info!("{htn:#?}");
@@ -488,13 +488,15 @@ fn test_options() {
     assert_eq!(
         pt.preconditions,
         vec![
-            HtnCondition::IsNone {
+            HtnCondition::EqualsNone {
                 field: "optnum1".to_string(),
-                syntax: "optnum1 is None".to_string(),
+                notted: false,
+                syntax: "optnum1 == None".to_string(),
             },
-            HtnCondition::IsSome {
+            HtnCondition::EqualsNone {
                 field: "optnum2".to_string(),
-                syntax: "optnum2 is Some".to_string(),
+                notted: true,
+                syntax: "optnum2 != None".to_string(),
             },
         ]
     );
@@ -505,14 +507,16 @@ fn test_options() {
         optnum2: Some(1),
         ..default()
     };
-    let condition = HtnCondition::IsNone {
+    let condition = HtnCondition::EqualsNone {
         field: "optnum1".to_string(),
+        notted: false,
         syntax: "optnum1 == None".to_string(),
     };
     assert!(condition.evaluate(&initial_state, &atr));
 
-    let condition = HtnCondition::IsNone {
+    let condition = HtnCondition::EqualsNone {
         field: "optnum2".to_string(),
+        notted: false,
         syntax: "optnum2 == None".to_string(),
     };
     assert!(!condition.evaluate(&initial_state, &atr));
@@ -521,8 +525,9 @@ fn test_options() {
         optnum1: Some(123),
         ..initial_state.clone()
     };
-    let condition = HtnCondition::IsNone {
+    let condition = HtnCondition::EqualsNone {
         field: "optnum1".to_string(),
+        notted: false,
         syntax: "optnum1 == None".to_string(),
     };
     assert!(!condition.evaluate(&state2, &atr));

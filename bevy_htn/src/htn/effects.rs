@@ -365,6 +365,7 @@ mod tests {
             energy -= 50,
             location = Location::Park,
             floatyness = 2.0,
+            opt = None,
         ]
     }
     "#;
@@ -375,7 +376,7 @@ mod tests {
             atr.register::<Location>();
         }
 
-        let htn = parse_htn::<State>(src);
+        let htn = parse_htn::<State>(src).expect("Failed to parse htn");
         let Some(Task::Primitive(pt)) = &htn.tasks.first() else {
             panic!("Task should exist");
         };
@@ -412,6 +413,10 @@ mod tests {
                     field: "floatyness".to_string(),
                     value: 2.0,
                     syntax: "floatyness = 2.0".to_string(),
+                },
+                Effect::SetNone {
+                    field: "opt".to_string(),
+                    syntax: "opt = None".to_string(),
                 },
             ]
         );
@@ -499,6 +504,14 @@ mod tests {
         };
         effect.apply(&mut state, &atr);
         assert_eq!(state.floatyness, 4.0);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::SetNone {
+            field: "opt".to_string(),
+            syntax: "opt = None".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.opt, None);
 
         // there is no SetSome yet. can maybe do it be constructing the default value of the Option Some,
         // but that should probably be restricted to expected_effects. bit unpleasant.

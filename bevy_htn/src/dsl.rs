@@ -10,77 +10,105 @@ use pest_derive::Parser;
 #[grammar = "src/htn.pest"]
 pub struct HtnParser;
 
-fn parse_condition(pair: Pair<Rule>) -> HtnCondition {
-    let op = pair.into_inner().next().unwrap();
-    let rule = op.as_rule();
-    let inner_pairs = op.into_inner();
-    match rule {
-        Rule::value_condition => parse_value_condition(inner_pairs),
-        Rule::option_condition => parse_option_condition(inner_pairs),
-        _ => panic!("Invalid condition {}", inner_pairs.as_str()),
+// fn parse_condition(pair: Pair<Rule>) -> Result<HtnCondition, String> {
+//     let op = pair.into_inner().next().unwrap();
+//     let rule = op.as_rule();
+//     let inner_pairs = op.into_inner();
+//     match rule {
+//         Rule::value_condition => parse_value_condition(inner_pairs),
+//         Rule::option_condition => parse_option_condition(inner_pairs),
+//         _ => panic!("Invalid condition {}", inner_pairs.as_str()),
+//     }
+// }
+
+fn parse_f32(val_str: &str, context: &str) -> Result<f32, String> {
+    let Ok(f) = val_str.parse::<f32>() else {
+        return Err(format!(
+            "Invalid float `{val_str}` in condition: `{context}`"
+        ));
+    };
+    Ok(f)
+}
+
+fn parse_i32(val_str: &str, context: &str) -> Result<i32, String> {
+    let Ok(i) = val_str.parse::<i32>() else {
+        return Err(format!(
+            "Invalid integer `{val_str}` in condition: `{context}`"
+        ));
+    };
+    Ok(i)
+}
+
+fn parse_bool(val_str: &str, context: &str) -> Result<bool, String> {
+    if val_str == "true" {
+        Ok(true)
+    } else if val_str == "false" {
+        Ok(false)
+    } else {
+        Err(format!(
+            "Invalid boolean `{val_str}` in condition: `{context}`"
+        ))
     }
 }
 
-fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
-    let syntax = pairs.as_str().to_string();
+fn parse_enum(val_str: &str, context: &str) -> Result<(String, String), String> {
+    let parts: Vec<&str> = val_str.split("::").collect();
+    if parts.len() != 2 {
+        return Err(format!(
+            "Invalid enum `{val_str}` in condition: `{context}`"
+        ));
+    }
+    let enum_type = parts[0].to_string();
+    let enum_variant = parts[1].to_string();
+    if enum_type.is_empty() || enum_variant.is_empty() {
+        return Err(format!(
+            "Invalid enum `{val_str}` in condition: `{context}`"
+        ));
+    }
+    Ok((enum_type, enum_variant))
+}
+
+fn parse_condition(pair: Pair<Rule>) -> Result<HtnCondition, String> {
+    let syntax = pair.as_str().to_string();
+    let mut pairs = pair.into_inner();
     // eg:  foo >= 10
-    let field = pairs.next().unwrap().as_str().to_string(); // foo
+    let field = pairs.next().unwrap().as_str().to_string(); // "foo"
     let op = pairs.next().unwrap().as_rule(); // Rule::op_gte
     let value = pairs.next().unwrap();
-    let val_rule = value.as_rule(); // Rule::value
-    let val_str = value.as_str(); // 10
+    let val_rule = value.as_rule(); // Rule::int_value
+    let val_str = value.as_str(); // "10"
 
     let notted = op == Rule::op_neq;
 
-    match (op, val_rule) {
+    let condition = match (op, val_rule) {
         // >, >= of INT value
-        (Rule::op_gte | Rule::op_gt, Rule::int_value) => {
-            let Ok(threshold) = val_str.parse::<i32>() else {
-                panic!("Invalid integer in condition: {val_str}");
-            };
-            HtnCondition::GreaterThanInt {
-                field,
-                threshold,
-                orequals: op == Rule::op_gte,
-                syntax,
-            }
-        }
+        (Rule::op_gte | Rule::op_gt, Rule::int_value) => HtnCondition::GreaterThanInt {
+            field,
+            threshold: parse_i32(val_str, &syntax)?,
+            orequals: op == Rule::op_gte,
+            syntax,
+        },
         // <, <= of INT value
-        (Rule::op_lte | Rule::op_lt, Rule::int_value) => {
-            let Ok(threshold) = val_str.parse::<i32>() else {
-                panic!("Invalid integer in condition: {val_str}");
-            };
-            HtnCondition::LessThanInt {
-                field,
-                threshold,
-                orequals: op == Rule::op_lte,
-                syntax,
-            }
-        }
+        (Rule::op_lte | Rule::op_lt, Rule::int_value) => HtnCondition::LessThanInt {
+            field,
+            threshold: parse_i32(val_str, &syntax)?,
+            orequals: op == Rule::op_lte,
+            syntax,
+        },
         // >, >= of F32 value
-        (Rule::op_gte | Rule::op_gt, Rule::float_value) => {
-            let Ok(threshold) = val_str.parse::<f32>() else {
-                panic!("Invalid float in condition: {val_str}");
-            };
-            HtnCondition::GreaterThanFloat {
-                field,
-                threshold,
-                orequals: op == Rule::op_gte,
-                syntax,
-            }
-        }
+        (Rule::op_gte | Rule::op_gt, Rule::float_value) => HtnCondition::GreaterThanFloat {
+            field,
+            threshold: parse_f32(val_str, &syntax)?,
+            orequals: op == Rule::op_gte,
+            syntax,
+        },
         // <, <= of F32 value
-        (Rule::op_lte | Rule::op_lt, Rule::float_value) => {
-            let Ok(threshold) = val_str.parse::<f32>() else {
-                panic!("Invalid float in condition: {val_str}");
-            };
-            HtnCondition::LessThanFloat {
-                field,
-                threshold,
-                orequals: op == Rule::op_lte,
-                syntax,
-            }
-        }
+        (Rule::op_lte | Rule::op_lt, Rule::float_value) => HtnCondition::LessThanFloat {
+            field,
+            threshold: parse_f32(val_str, &syntax)?,
+            orequals: op == Rule::op_lte,
+            syntax,
+        },
         // >, >= of identifier
         (Rule::op_gte | Rule::op_gt, Rule::identifier) => HtnCondition::GreaterThanIdentifier {
             field,
@@ -96,51 +124,35 @@ fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
             syntax,
         },
         // equality of bool
-        (Rule::op_eq | Rule::op_neq, Rule::bool_value) => {
-            let bool_val = match val_str {
-                "true" => true,
-                "false" => false,
-                _ => unreachable!(),
-            };
-            HtnCondition::EqualsBool {
-                field,
-                value: bool_val,
-                notted,
-                syntax,
-            }
-        }
+        (Rule::op_eq | Rule::op_neq, Rule::bool_value) => HtnCondition::EqualsBool {
+            field,
+            value: parse_bool(val_str, &syntax)?,
+            notted,
+            syntax,
+        },
+        // equality of None
+        (Rule::op_eq | Rule::op_neq, Rule::none_value) => HtnCondition::EqualsNone {
+            field,
+            notted,
+            syntax,
+        },
         // equality of i32
-        (Rule::op_eq | Rule::op_neq, Rule::int_value) => {
-            if let Ok(int_val) = val_str.parse::<i32>() {
-                HtnCondition::EqualsInt {
-                    field,
-                    value: int_val,
-                    notted,
-                    syntax,
-                }
-            } else {
-                panic!("Invalid integer value: {}", val_str);
-            }
-        }
+        (Rule::op_eq | Rule::op_neq, Rule::int_value) => HtnCondition::EqualsInt {
+            field,
+            value: parse_i32(val_str, &syntax)?,
+            notted,
+            syntax,
+        },
         // equality of f32
-        (Rule::op_eq | Rule::op_neq, Rule::float_value) => {
-            if let Ok(float_val) = val_str.parse::<f32>() {
-                HtnCondition::EqualsFloat {
-                    field,
-                    value: float_val,
-                    notted,
-                    syntax,
-                }
-            } else {
-                panic!("Invalid float value: {}", val_str);
-            }
-        }
+        (Rule::op_eq | Rule::op_neq, Rule::float_value) => HtnCondition::EqualsFloat {
+            field,
+            value: parse_f32(val_str, &syntax)?,
+            notted,
+            syntax,
+        },
         // equality of enum
         (Rule::op_eq | Rule::op_neq, Rule::enum_value) => {
-            // safety: parser ensures a well formed enum containing ::
-            let parts: Vec<&str> = val_str.split("::").collect();
-            let enum_type = parts[0].to_string();
-            let enum_variant = parts[1].to_string();
+            let (enum_type, enum_variant) = parse_enum(val_str, &syntax)?;
             HtnCondition::EqualsEnum {
                 field,
                 enum_type,
@@ -157,26 +169,12 @@ fn parse_value_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
             syntax,
         },
 
-        _ => panic!("Unsupported operator: {:?}", op),
-    }
+        _ => return Err(format!("Unsupported condition `{syntax}`")),
+    };
+    Ok(condition)
 }
 
-fn parse_option_condition(mut pairs: Pairs<Rule>) -> HtnCondition {
-    let syntax = pairs.as_str().to_string();
-    info!("parse_option_condition: {syntax}");
-    // eg:  foo is None 10
-    let field = pairs.next().unwrap().as_str().to_string(); // foo
-    let op = pairs.next().unwrap().as_str(); // is
-    assert_eq!(op, "is");
-    let val_str = pairs.next().unwrap().as_str(); // None or Some
-    match val_str {
-        "None" => HtnCondition::IsNone { field, syntax },
-        "Some" => HtnCondition::IsSome { field, syntax },
-        _ => panic!("Invalid value for 'is' operator: {syntax}"),
-    }
-}
-
-fn parse_effect(pair: Pair<Rule>) -> Effect {
+fn parse_effect(pair: Pair<Rule>) -> Result<Effect, String> {
     let syntax = pair.as_str().to_string();
     // let inner_pair = pair.into_inner().next().unwrap();
     let effect_pair = pair.into_inner().next().unwrap();
@@ -189,34 +187,24 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
     let val_pair = parts.next().unwrap();
     let val_rule = val_pair.as_rule(); // Rule::int_value
     let val_str = val_pair.as_str(); // "10"
-    match (effect_rule, val_rule) {
+    let effect = match (effect_rule, val_rule) {
         (Rule::set_effect_literal, Rule::bool_value) => Effect::SetBool {
             field,
-            value: val_str == "true",
+            value: parse_bool(val_str, &syntax)?,
             syntax,
         },
-        (Rule::set_effect_literal, Rule::int_value) => {
-            let int_val = val_str
-                .parse::<i32>()
-                .expect("Invalid integer in set effect");
-            Effect::SetInt {
-                field,
-                value: int_val,
-                syntax,
-            }
-        }
-        (Rule::set_effect_literal, Rule::float_value) => {
-            let float_val = val_str.parse::<f32>().expect("Invalid f32 in set effect");
-            Effect::SetFloat {
-                field,
-                value: float_val,
-                syntax,
-            }
-        }
+        (Rule::set_effect_literal, Rule::int_value) => Effect::SetInt {
+            field,
+            value: parse_i32(val_str, &syntax)?,
+            syntax,
+        },
+        (Rule::set_effect_literal, Rule::float_value) => Effect::SetFloat {
+            field,
+            value: parse_f32(val_str, &syntax)?,
+            syntax,
+        },
         (Rule::set_effect_literal, Rule::enum_value) => {
-            let parts: Vec<&str> = val_str.split("::").collect();
-            let enum_type = parts[0].to_string();
-            let enum_variant = parts[1].to_string();
+            let (enum_type, enum_variant) = parse_enum(val_str, &syntax)?;
             Effect::SetEnum {
                 field,
                 enum_type,
@@ -224,32 +212,28 @@ fn parse_effect(pair: Pair<Rule>) -> Effect {
                 syntax,
             }
         }
+        (Rule::set_effect_literal, Rule::none_value) => Effect::SetNone { field, syntax },
         (Rule::set_effect_identifier, Rule::identifier) => Effect::SetIdentifier {
             field,
             field_source: val_str.to_string(),
             syntax,
         },
-        (Rule::set_effect_inc_literal, Rule::int_value) => {
-            let val = val_str.parse::<i32>().expect("Invalid integer");
-            Effect::IncrementInt {
-                field,
-                by: val,
-                syntax,
-            }
-        }
-        (Rule::set_effect_dec_literal, Rule::int_value) => {
-            let val = val_str.parse::<i32>().expect("Invalid integer");
-            Effect::IncrementInt {
-                field,
-                by: -val,
-                syntax,
-            }
-        }
-        _ => panic!("Unsupported effect type"),
-    }
+        (Rule::set_effect_inc_literal, Rule::int_value) => Effect::IncrementInt {
+            field,
+            by: parse_i32(val_str, &syntax)?,
+            syntax,
+        },
+        (Rule::set_effect_dec_literal, Rule::int_value) => Effect::IncrementInt {
+            field,
+            by: -parse_i32(val_str, &syntax)?,
+            syntax,
+        },
+        _ => return Err(format!("Unsupported effect type: `{syntax}`")),
+    };
+    Ok(effect)
 }
 
-fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> PrimitiveTask<T> {
+fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<PrimitiveTask<T>, String> {
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
     let mut builder = PrimitiveTaskBuilder::<T>::new(name);
@@ -274,7 +258,7 @@ fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> PrimitiveTask<T> 
                     .into_inner()
                     .filter(|p| p.as_rule() == Rule::effect)
                     .map(|p| parse_effect(p))
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 for effect in effects {
                     builder = builder.effect(effect);
@@ -285,7 +269,7 @@ fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> PrimitiveTask<T> 
                     .into_inner()
                     .filter(|p| p.as_rule() == Rule::effect)
                     .map(|p| parse_effect(p))
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 for effect in effects {
                     builder = builder.expected_effect(effect);
@@ -296,7 +280,7 @@ fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> PrimitiveTask<T> 
                     .into_inner()
                     .filter(|p| p.as_rule() == Rule::condition)
                     .map(|p| parse_condition(p))
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 for condition in conditions {
                     builder = builder.precondition(condition);
@@ -306,10 +290,10 @@ fn parse_primitive_task<T: HtnStateTrait>(pair: Pair<Rule>) -> PrimitiveTask<T> 
         }
     }
 
-    builder.build()
+    Ok(builder.build())
 }
 
-fn parse_method<T: HtnStateTrait>(pair: Pair<Rule>) -> Method<T> {
+fn parse_method<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<Method<T>, String> {
     let mut builder = MethodBuilder::<T>::new();
     let mut inner = pair.into_inner().peekable();
 
@@ -328,7 +312,7 @@ fn parse_method<T: HtnStateTrait>(pair: Pair<Rule>) -> Method<T> {
                     .into_inner()
                     .filter(|p| p.as_rule() == Rule::condition)
                     .map(|p| parse_condition(p))
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 for condition in conditions {
                     builder = builder.precondition(condition);
@@ -348,66 +332,69 @@ fn parse_method<T: HtnStateTrait>(pair: Pair<Rule>) -> Method<T> {
             _ => {}
         }
     }
-    builder.build()
+    Ok(builder.build())
 }
 
-fn parse_compound_task<T: HtnStateTrait>(pair: Pair<Rule>) -> CompoundTask<T> {
+fn parse_compound_task<T: HtnStateTrait>(pair: Pair<Rule>) -> Result<CompoundTask<T>, String> {
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().trim_matches('"').to_string();
     let mut builder = CompoundTaskBuilder::<T>::new(name);
 
     for method_pair in inner {
         if method_pair.as_rule() == Rule::method {
-            let method = parse_method::<T>(method_pair);
+            let method = parse_method::<T>(method_pair)?;
             builder = builder.method(method);
         }
     }
 
-    builder.build()
+    Ok(builder.build())
 }
 
-fn parse_schema(pair: Pair<Rule>) -> HtnSchema {
+fn parse_schema(pair: Pair<Rule>) -> Result<HtnSchema, String> {
     let mut inner_rules = pair.into_inner();
-    let schema_version_statement = inner_rules.next().unwrap();
-    if schema_version_statement.as_rule() == Rule::schema_version_statement {
-        let version_pair = schema_version_statement.into_inner().next().unwrap();
+    let ver = inner_rules.next().unwrap();
+    if ver.as_rule() == Rule::schema_version_statement {
+        let version_pair = ver.into_inner().next().unwrap();
         if version_pair.as_rule() == Rule::SEMVER {
             let version = version_pair.as_str().to_string();
-            HtnSchema { version }
+            Ok(HtnSchema { version })
         } else {
-            panic!("Invalid version: {}", version_pair.as_str());
+            Err(format!(
+                "Invalid version field `{}` in htn schema",
+                version_pair.as_str()
+            ))
         }
     } else {
-        panic!(
-            "Expected schema_version_statement, found: {}",
-            schema_version_statement.as_str()
-        );
+        Err(format!(
+            "Expected version field in htn schema, found: `{}`",
+            ver.as_str()
+        ))
     }
 }
 
 // TODO error handling. return Result..
-pub fn parse_htn<T: HtnStateTrait>(input: &str) -> HTN<T> {
-    let pairs = HtnParser::parse(Rule::domain, input).expect("Failed to parse DSL");
+pub fn parse_htn<T: HtnStateTrait>(input: &str) -> Result<HTN<T>, String> {
+    let pairs = HtnParser::parse(Rule::domain, input).map_err(|e| e.to_string())?;
     let mut htn_builder = HTN::<T>::builder();
 
     let htn_pair = pairs.into_iter().next().unwrap();
     for pair in htn_pair.into_inner() {
         match pair.as_rule() {
             Rule::schema => {
-                let meta = parse_schema(pair);
+                let meta = parse_schema(pair)?;
                 htn_builder = htn_builder.schema(meta);
             }
             Rule::primitive_task => {
-                let task = parse_primitive_task::<T>(pair);
+                let task = parse_primitive_task::<T>(pair)?;
                 htn_builder = htn_builder.primitive_task(task);
             }
             Rule::compound_task => {
-                let task = parse_compound_task::<T>(pair);
+                let task = parse_compound_task::<T>(pair)?;
                 htn_builder = htn_builder.compound_task(task);
             }
             _ => {}
         }
     }
 
-    htn_builder.build()
+    Ok(htn_builder.build())
 }

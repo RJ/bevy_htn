@@ -8,12 +8,9 @@ use bevy::{
 
 #[derive(Clone, Debug, Reflect, PartialEq)]
 pub enum HtnCondition {
-    IsNone {
+    EqualsNone {
         field: String,
-        syntax: String,
-    },
-    IsSome {
-        field: String,
+        notted: bool,
         syntax: String,
     },
     EqualsBool {
@@ -96,8 +93,7 @@ impl HtnCondition {
             HtnCondition::EqualsEnum { syntax, .. } => syntax.clone(),
             HtnCondition::EqualsInt { syntax, .. } => syntax.clone(),
             HtnCondition::EqualsIdentifier { syntax, .. } => syntax.clone(),
-            HtnCondition::IsNone { syntax, .. } => syntax.clone(),
-            HtnCondition::IsSome { syntax, .. } => syntax.clone(),
+            HtnCondition::EqualsNone { syntax, .. } => syntax.clone(),
             HtnCondition::EqualsFloat { syntax, .. } => syntax.clone(),
             HtnCondition::GreaterThanFloat { syntax, .. } => syntax.clone(),
             HtnCondition::LessThanFloat { syntax, .. } => syntax.clone(),
@@ -152,8 +148,7 @@ impl HtnCondition {
             HtnCondition::LessThanFloat { field, syntax, .. } => {
                 Self::verify_field_type::<f32>(reflected, field, syntax)
             }
-            HtnCondition::IsNone { field, syntax, .. }
-            | HtnCondition::IsSome { field, syntax, .. } => {
+            HtnCondition::EqualsNone { field, syntax, .. } => {
                 if let Some(val) = reflected.field(field) {
                     let dyn_enum = val.reflect_ref().as_enum().map_err(|_| {
                         format!(
@@ -532,7 +527,7 @@ impl HtnCondition {
                     _ => unreachable!(),
                 }
             }
-            HtnCondition::IsNone { field, .. } | HtnCondition::IsSome { field, .. } => {
+            HtnCondition::EqualsNone { field, notted, .. } => {
                 if let Some(val) = reflected.field(field) {
                     let dyn_enum = val
                         .reflect_ref()
@@ -549,11 +544,7 @@ impl HtnCondition {
                         return false;
                     }
                     let var_name = dyn_enum.variant_name();
-                    match self {
-                        HtnCondition::IsNone { .. } if var_name == "None" => true,
-                        HtnCondition::IsSome { .. } if var_name == "Some" => true,
-                        _ => false,
-                    }
+                    var_name == "None" && !*notted
                 } else {
                     false
                 }
@@ -594,6 +585,7 @@ mod tests {
             location: Location,
             e1: i32,
             e2: i32,
+            optfloat: Option<f32>,
         }
 
         let src = r#"
@@ -611,6 +603,7 @@ mod tests {
                     e1 != e2,
                     e1 > e2,
                     floatyness > 2.0,
+                    optfloat == None,
                 ]
                 effects: [
                 ]
@@ -622,7 +615,7 @@ mod tests {
             atr.register::<State>();
             atr.register::<Location>();
         }
-        let htn = parse_htn::<State>(src);
+        let htn = parse_htn::<State>(src).expect("Failed to parse htn");
         let state = State::default();
         assert!(htn.verify_without_operators(&state, &atr).is_ok());
         // info!("{htn:#?}");
@@ -675,6 +668,11 @@ mod tests {
                     orequals: false,
                     syntax: "floatyness > 2.0".to_string(),
                 },
+                HtnCondition::EqualsNone {
+                    field: "optfloat".to_string(),
+                    notted: false,
+                    syntax: "optfloat == None".to_string(),
+                },
             ]
         );
         assert_eq!(pt.name, "Conditions Test");
@@ -689,6 +687,7 @@ mod tests {
             e1: 1,
             e2: 2,
             floatyness: 2.0,
+            optfloat: None,
         };
 
         let condition = HtnCondition::EqualsBool {
@@ -781,5 +780,12 @@ mod tests {
             ..state.clone()
         };
         assert!(condition.evaluate(&state2, &atr));
+
+        let condition = HtnCondition::EqualsNone {
+            field: "optfloat".to_string(),
+            notted: false,
+            syntax: "optfloat == None".to_string(),
+        };
+        assert!(condition.evaluate(&state, &atr));
     }
 }
