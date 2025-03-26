@@ -3,6 +3,7 @@ resolver = "2"
 members = ["bevy_htn_macros", "bevy_htn"]
 
 [workspace.package]
+description = "A bevy hierarchical task network, using bevy_behave trees as operators"
 version = "0.0.1"
 authors = ["Richard Jones <rj@metabrew.com>"]
 repository = "https://github.com/RJ/bevy_htn"
@@ -31,8 +32,9 @@ incremental = false
 debug = false
 
 [workspace.dependencies]
-bevy_htn_macros = {path = "bevy_htn_macros"}
-bevy = {version = "0.15", default-features = false, features = ["bevy_asset", "file_watcher"]}
+bevy_htn_macros = "0.0.1"
+# TODO: split the Htn asset crate out, so you can use the HTN without file_watcher and multithreaded (wasm)
+bevy = {version = "0.15", default-features = false, features = ["bevy_asset", "file_watcher", "multi_threaded"]}
 futures-lite = "2.6.0"
 pest = "2.7.15"
 pest_derive = "2.7.15"
@@ -44,4 +46,5 @@ rand = "0.9.0"
 
 [patch.crates-io]
 bevy_behave = { path = "../bevy_behave" }
+bevy_htn_macros = {path = "./bevy_htn_macros"}
 
