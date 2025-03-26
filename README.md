@@ -3,118 +3,181 @@
 Working on an HTN that uses [bevy_behave](https://github.com/RJ/bevy_behave) behaviour trees as
 operators, and can hot reload the `.htn` definition via the asset server.
 
- `test.rs` best place to see it in action for now.
+Check out the [characters example](https://github.com/RJ/bevy_htn/blob/main/bevy_htn/examples/characters/main.rs), and the accompanying [.htn file](https://github.com/RJ/bevy_htn/blob/main/bevy_htn/assets/dude.htn) that describes the bot behaviour.
 
- RJ in bevy #ai discord.
+
+<img src="https://github.com/RJ/bevy_htn/blob/main/media/characters.png">
+
+RJ in bevy #ai discord.
+
+### Work in progress
+
+I'm still building this, so expect poor docs and logspam for the time being.
+My behaviour tree crate [bevy_behave](https://github.com/RJ/bevy_behave) is in a more production-ready state, and is what the HTN operators are made from.
 
 ```rust
-#[derive(Reflect, Resource, Clone, Debug, Default)]
-#[reflect(Default, Resource)]
-struct TravelState {
-    cash: i32,
-    distance_to_park: i32,
-    happy: bool,
-    my_location: Location,
-    taxi_location: Location,
-}
 
-// DEFINE HTN (can be loaded from an .htn file by asset loader too)
+#[test]
+fn test_travel_htn() {
+    {
+        // Don't need app for test, just want to set up the logger.
+        let mut app = App::new();
+        app.add_plugins(bevy::log::LogPlugin::default());
+    }
 
-// for an initial state with distance > 4 this will cause the planner to try the first
-// TravelToPark method, then backtrack when the precondition for Walk is not met,
-// then try the second method, which succeeds (get a taxi).
-let src = r#"
-schema {
+    // DEFINE OPERATORS (which are behaviour trees)
+
+    // the default behaviour of operators is to be emitted as triggers,
+    // ie. Behave::trigger(WalkOperator)
+    // but you can also make them components to be spawned, or implement HtnOperator
+    // yourself to provide a custom behaviour tree.
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
+    #[reflect(Default, HtnOperator)]
+    struct WalkOperator;
+
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator)]
+    #[reflect(Default, HtnOperator)]
+    struct TaxiOperator;
+
+    // an operator that returns a custom behaviour tree.
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
+    #[reflect(Default, HtnOperator)]
+    struct RideTaxiOperator(i32);
+    impl HtnOperator for RideTaxiOperator {
+        fn to_tree(&self) -> Tree<Behave> {
+            behave! { Behave::Wait(self.0 as f32) }
+        }
+    }
+
+    // this one would get spawned into an entity using Behave::spawn_named.
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq, HtnOperator, Component)]
+    #[reflect(Default, HtnOperator)]
+    #[spawn_named = "Paying the taxi!"]
+    struct PayTaxiOperator;
+
+    // DEFINE PLANNER STATE
+
+    #[derive(Reflect, Default, Clone, Debug, PartialEq, Eq)]
+    #[reflect(Default)]
+    enum Location {
+        #[default]
+        Home,
+        Other,
+        Park,
+    }
+
+    #[derive(Reflect, Resource, Clone, Debug, Default, Component)]
+    #[reflect(Default, Resource)]
+    struct TravelState {
+        cash: i32,
+        distance_to_park: i32,
+        happy: bool,
+        my_location: Location,
+        taxi_location: Location,
+    }
+
+    // DEFINE HTN (can be loaded from an .htn file by asset loader too)
+
+    // for an initial state with distance > 4 this will cause the planner to try the first
+    // TravelToPark method, then backtrack when the precondition for Walk is not met,
+    // then try the second method, which succeeds (get a taxi).
+    let src = r#"
+    schema {
         version: 0.1.0
-}
-
-compound_task "TravelToPark" {
-    method {
-        subtasks: [ Walk ]
     }
-    method {
-        subtasks: [ Taxi ]
+
+    compound_task "TravelToPark" {
+        method {
+            subtasks: [ Walk ]
+        }
+        method {
+            subtasks: [ Taxi ]
+        }
     }
-}
-        
-primitive_task "Walk" {
-    operator: WalkOperator
-    preconditions: [distance_to_park <= 4, my_location != Location::Park, happy == false]
-    effects: [
-        my_location = Location::Park,
-        happy = true,
-    ]
-}
-
-compound_task "Taxi" {
-    method {
-        subtasks: [CallTaxi, RideTaxi, PayTaxi]
+            
+    primitive_task "Walk" {
+        operator: WalkOperator
+        preconditions: [distance_to_park <= 4, my_location != Location::Park, happy == false]
+        effects: [
+            my_location = Location::Park,
+            happy = true,
+        ]
     }
-}
 
-primitive_task "CallTaxi" {
-    operator: TaxiOperator
-    preconditions: [cash >= 1]
-    effects: [taxi_location = my_location]
-}
+    compound_task "Taxi" {
+        method {
+            subtasks: [CallTaxi, RideTaxi, PayTaxi]
+        }
+    }
 
-primitive_task "RideTaxi" {
-    operator: RideTaxiOperator(distance_to_park)
-    preconditions: [taxi_location == my_location, cash >= 1]
-    effects: [taxi_location = Location::Park, my_location = Location::Park, happy = true]
-}
+    primitive_task "CallTaxi" {
+        operator: TaxiOperator
+        preconditions: [cash >= 1]
+        effects: [taxi_location = my_location]
+    }
 
-primitive_task "PayTaxi" {
-    operator: PayTaxiOperator
-    preconditions: [taxi_location == Location::Park, cash >= 1]
-    effects: [cash -= 1]
-}
-"#;
+    primitive_task "RideTaxi" {
+        operator: RideTaxiOperator(distance_to_park)
+        preconditions: [taxi_location == my_location, cash >= 1]
+        effects: [taxi_location = Location::Park, my_location = Location::Park, happy = true]
+    }
 
-let htn = parse_htn::<TravelState>(src);
-// verify via reflection that any types used in the htn are registered:
-htn.verify_all(&TravelState::default(), &atr)?;
+    primitive_task "PayTaxi" {
+        operator: PayTaxiOperator
+        preconditions: [taxi_location == Location::Park, cash >= 1]
+        effects: [cash -= 1]
+    }
+    "#;
 
-let mut planner = HtnPlanner::new(&htn, &atr);
-// Run the planner with alternative starting states to see different outcomes:
-{
-    warn!("Testing walking state");
-    let initial_state = TravelState {
-        cash: 10,
-        distance_to_park: 1,
-        my_location: Location::Home,
-        taxi_location: Location::Other,
-        happy: false,
-    };
-    let plan = planner.plan(&initial_state);
-    assert_eq!(plan.task_names(), vec!["Walk"]);
-}
+    // REGISTER TYPES USED IN HTN
 
-{
-    warn!("Testing taxi state");
-    let initial_state = TravelState {
-        cash: 10,
-        distance_to_park: 5,
-        my_location: Location::Home,
-        taxi_location: Location::Other,
-        happy: false,
-    };
-    let plan = planner.plan(&initial_state);
-    assert_eq!(plan.task_names(), vec!["CallTaxi", "RideTaxi", "PayTaxi"]);
+    // normally you'd use app.register_type or Res<AppTypeRegistry>
+    let atr = AppTypeRegistry::default();
+    {
+        let mut atr = atr.write();
+        atr.register::<TravelState>();
+        atr.register::<Location>();
+        atr.register::<WalkOperator>();
+        atr.register::<TaxiOperator>();
+        atr.register::<RideTaxiOperator>();
+        atr.register::<PayTaxiOperator>();
+    }
+    let htn = parse_htn::<TravelState>(src).expect("Failed to parse htn");
+
+    // verify via reflection that any types used in the htn are registered:
+    match htn.verify_all(&TravelState::default(), &atr) {
+        Ok(_) => {}
+        Err(e) => panic!("HTN type verification failed: {e:?}"),
+    }
+
+    let mut planner = HtnPlanner::new(&htn, &atr);
+
+    // Run the planner with alternative starting states to see different outcomes:
+    {
+        let initial_state = TravelState {
+            cash: 10,
+            distance_to_park: 1,
+            my_location: Location::Home,
+            taxi_location: Location::Other,
+            happy: false,
+        };
+        let plan = planner.plan(&initial_state);
+        assert_eq!(plan.task_names(), vec!["Walk"]);
+    }
+
+    {
+        let initial_state = TravelState {
+            cash: 10,
+            distance_to_park: 5,
+            my_location: Location::Home,
+            taxi_location: Location::Other,
+            happy: false,
+        };
+        let plan = planner.plan(&initial_state);
+        assert_eq!(plan.task_names(), vec!["CallTaxi", "RideTaxi", "PayTaxi"]);
+    }
 }
 ```
-
-### ...
-Need sensors that project the ECS state onto the simplified planner state struct, which can just be a component of the NPC.
-
-PLanning can be triggered when:
-* no plan present
-* plan finished
-* world state changed
-
-## plan runner
-
-desribe the entity hierarchy and marker components used to host the htn / subtrees.
 
 # behave.
 
@@ -133,11 +196,6 @@ The goal state of an HTN is kind of encoded into the task definitions.
 Design your tasks to elicit the desired state.
 
 Might be interesting to add a backwards goal-state based planner like goap atop the htn structure, but it would be slow compared to the forwards HTN planning approach, and i want to have loads of NPC entities.
-
-## TODO
-
-while a plan is running, if gamestate changes, verify all preconditions of current and remaining tasks in the plan still pass,
-and if not, fail the plan.
 
 ### Reading
 
