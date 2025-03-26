@@ -5,6 +5,9 @@ members = ["bevy_htn_macros", "bevy_htn"]
 [workspace.package]
 version = "0.0.1"
 authors = ["Richard Jones <rj@metabrew.com>"]
+repository = "https://github.com/RJ/bevy_htn"
+#documentation = "https://docs.rs/bevy_behave"
+keywords = ["bevy", "tree", "ai", "game", "htn"]
 publish = true
 edition = "2021"
 license = "MIT OR Apache-2.0"
