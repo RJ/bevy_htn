@@ -26,18 +26,22 @@ pub fn coin_plugin(app: &mut App) {
 }
 
 #[derive(Event)]
-struct SpawnCoin(f32, f32);
+pub struct SpawnCoin(f32, f32);
 
 fn update_coins(
     q_coins: Query<Entity, With<Coin>>,
     mut commands: Commands,
     level_config: Res<LevelConfig>,
 ) {
+    // despawn all coins
     q_coins
         .iter()
         .for_each(|e| commands.entity(e).despawn_recursive());
-    let (x, z) = level_config.random_position();
-    commands.trigger(SpawnCoin(x, z));
+    // maybe spawn one
+    if rand::random::<bool>() {
+        let (x, z) = level_config.random_position();
+        commands.trigger(SpawnCoin(x, z));
+    }
 }
 
 fn on_spawn_coin(t: Trigger<SpawnCoin>, mut commands: Commands, asset_server: Res<AssetServer>) {

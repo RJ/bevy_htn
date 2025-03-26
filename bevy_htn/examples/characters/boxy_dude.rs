@@ -1,7 +1,8 @@
 use bevy::{color::palettes::css, prelude::*};
+use bevy_htn::prelude::{HtnTaskEvent, Plan};
 use std::time::Duration;
 
-use crate::{coins::CoinCollected, CursorGroundCoords, GameState};
+use crate::{coins::CoinCollected, label::OverheadLabel, Config, CursorGroundCoords, GameState};
 const CHARACTER_PATH: &str = "models/animated/character.glb";
 const G: f32 = 80.0;
 
@@ -10,6 +11,7 @@ pub fn dude_plugin(app: &mut App) {
     app.register_type::<Cc>();
     app.add_systems(Startup, (setup_animations, spawn_player));
     app.add_systems(Update, setup_scene_once_loaded);
+    app.add_systems(Update, on_state_change_update_label);
     app.add_systems(
         Update,
         (
@@ -22,6 +24,8 @@ pub fn dude_plugin(app: &mut App) {
     );
     app.add_observer(on_spawn_dude);
     app.add_observer(on_spawn_player);
+    app.add_observer(on_task_event);
+    app.add_observer(on_plan_added);
 }
 
 /// Marker for all characters, human or AI
@@ -29,7 +33,7 @@ pub fn dude_plugin(app: &mut App) {
 #[require(Name(|| Name::new("Boxy Dude")))]
 #[require(Cc(|| Cc {
     speed: 50.0,
-    jump_vel: 20.0,
+    jump_vel: 25.0,
     ..default()
 }))]
 pub struct Dude;
@@ -102,6 +106,38 @@ fn on_spawn_player(
                 .with_rotation(Quat::from_rotation_x(std::f32::consts::PI)),
         ))
         .set_parent(t.entity());
+}
+
+fn on_state_change_update_label(
+    q: Query<(&GameState, &Parent), Changed<GameState>>,
+    mut q_label: Query<&mut OverheadLabel>,
+) {
+    for (state, parent) in q.iter() {
+        let mut label = q_label.get_mut(parent.get()).unwrap();
+        label.coins = state.coins_collected;
+        label.mood = format!("{:?}", state.mood);
+    }
+}
+
+fn on_task_event(t: Trigger<HtnTaskEvent>, mut q: Query<&mut OverheadLabel>) {
+    info!("Task event: {t:?}");
+    let HtnTaskEvent::Executing(task_name) = t.event() else {
+        return;
+    };
+    if let Ok(mut label) = q.get_mut(t.entity()) {
+        label.current_task = task_name.clone();
+    }
+}
+
+fn on_plan_added(
+    t: Trigger<OnInsert, Plan>,
+    q: Query<(&Plan, &Parent)>,
+    mut q_label: Query<&mut OverheadLabel>,
+) {
+    let (plan, parent) = q.get(t.entity()).unwrap();
+    let character_entity = parent.get();
+    let mut label = q_label.get_mut(character_entity).unwrap();
+    label.plan = plan.task_names();
 }
 
 fn spawn_player(mut commands: Commands) {
@@ -242,6 +278,7 @@ fn character_controller(
     mut q: Query<(&mut Transform, &mut Cc, Has<Player>), With<Dude>>,
     time: Res<Time>,
     mut gizmos: Gizmos,
+    config: Res<Config>,
 ) {
     for (mut transform, mut cc, _is_player) in q.iter_mut() {
         let dt = time.delta_secs();
@@ -257,10 +294,12 @@ fn character_controller(
         }
 
         if let Some(dest) = cc.destination {
-            // draw destination gizmo:
-            let start = Vec3::new(dest.x, 20.0, dest.y);
-            let end = Vec3::new(dest.x, 0.0, dest.y);
-            gizmos.arrow(start, end, css::RED);
+            if config.draw_gizmos {
+                // draw destination gizmo:
+                let start = Vec3::new(dest.x, 20.0, dest.y);
+                let end = Vec3::new(dest.x, 0.0, dest.y);
+                gizmos.arrow(start, end, css::RED);
+            }
             // -----
             let dist = dest.distance(transform.translation.xz());
             let at_dest = dist < 3.0;

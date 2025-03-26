@@ -3,21 +3,35 @@ use bevy_htn::prelude::*;
 mod boxy_dude;
 mod coins;
 mod cursor;
+mod label;
 mod setup;
 use bevy::{
-    color::palettes::css, input::common_conditions::input_toggle_active,
-    pbr::CascadeShadowConfigBuilder, prelude::*, window::PrimaryWindow,
+    color::palettes::css,
+    input::common_conditions::{input_just_pressed, input_toggle_active},
+    pbr::CascadeShadowConfigBuilder,
+    prelude::*,
+    window::PrimaryWindow,
 };
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::quick::{ResourceInspectorPlugin, WorldInspectorPlugin};
 use boxy_dude::*;
 use coins::*;
 use cursor::*;
+use label::*;
 use setup::*;
 use std::f32::consts::PI;
+
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct Config {
+    pub draw_gizmos: bool,
+}
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .register_type::<Config>()
+        // overhead floaty label plugin, to aid debugging:
+        .add_plugins(label_plugin)
         // Add camera, ground plane, light, etc
         .add_plugins(setup_plugin)
         // Track cursor position on the ground plane, make player look towards cursor
@@ -30,23 +44,43 @@ fn main() {
         .add_plugins(
             WorldInspectorPlugin::default().run_if(input_toggle_active(false, KeyCode::F12)),
         )
-        .add_systems(Update, draw_debug)
-        .add_systems(Startup, add_bots)
+        .add_plugins(
+            ResourceInspectorPlugin::<Config>::default()
+                .run_if(input_toggle_active(true, KeyCode::F11)),
+        )
+        .add_systems(
+            Update,
+            draw_debug.run_if(|conf: Res<Config>| conf.draw_gizmos),
+        )
+        .add_systems(Startup, add_bot)
+        .add_systems(Update, add_bot.run_if(input_just_pressed(KeyCode::KeyB)))
+        .add_observer(on_add_bots)
         .add_plugins(htn_plugins)
+        .init_resource::<Config>()
         .run();
 }
 
-fn add_bots(mut commands: Commands, level_config: Res<LevelConfig>) {
-    for _ in 0..1 {
+fn add_bot(mut commands: Commands) {
+    commands.trigger(AddBots(1));
+}
+
+#[derive(Event)]
+struct AddBots(usize);
+
+fn on_add_bots(t: Trigger<AddBots>, mut commands: Commands, level_config: Res<LevelConfig>) {
+    let num = t.event().0;
+    for _ in 0..num {
         let (x, z) = level_config.random_position();
-        let pos = Vec3::new(x, 0.0, z);
-        let _bot = commands
+        let pos = Vec3::new(x, 10.0, z);
+        let bot_id = commands
             .spawn((
                 Name::new("Bot"),
                 Dude,
                 Transform::from_scale(Vec3::ONE * 10.0).with_translation(pos),
+                OverheadLabel::new("Bot"),
             ))
             .id();
+        info!("Adding bot: {bot_id}");
     }
 }
 
@@ -97,6 +131,12 @@ pub struct MoveToOperator(pub Option<Vec2>);
 #[require(BehaveTimeout(||BehaveTimeout::from_secs(3.0, true)))]
 pub struct SpinOperator;
 
+#[derive(Debug, Reflect, Default, Clone, Component, HtnOperator)]
+#[reflect(Default, HtnOperator)]
+#[spawn_named = "Cower"]
+#[require(BehaveTimeout(||BehaveTimeout::from_secs(5.0, true)))]
+pub struct CowerOperator;
+
 #[derive(Debug, Reflect, Default, Clone, HtnOperator)]
 #[reflect(Default, HtnOperator)]
 pub struct BecomeScaredOperator;
@@ -119,6 +159,7 @@ fn htn_plugins(app: &mut App) {
     app.register_type::<PrepareToFleeOperator>();
     app.register_type::<WaitOperator>();
     app.register_type::<SpinOperator>();
+    app.register_type::<CowerOperator>();
     app.register_type::<BecomeScaredOperator>();
     app.add_plugins(HtnAssetPlugin::<GameState>::default());
     app.add_plugins(HtnPlugin::<GameState>::default());
@@ -136,6 +177,7 @@ fn htn_plugins(app: &mut App) {
     app.add_observer(on_become_scared);
     app.add_systems(Update, enemy_sensors);
     app.add_systems(Update, spin_system);
+    app.add_systems(Update, cower_system);
 }
 
 fn check_asset_loaded(
@@ -194,6 +236,7 @@ fn on_prepare_to_flee(
     t: Trigger<BehaveTrigger<PrepareToFleeOperator>>,
     mut commands: Commands,
     mut q: Query<&mut GameState>,
+    q_own_location: Query<&Transform>,
     level_config: Res<LevelConfig>,
 ) {
     let ctx = t.ctx();
@@ -203,8 +246,34 @@ fn on_prepare_to_flee(
                 .expect("Supervisor entity not found"),
         )
         .expect("GameState not found");
-    let (x, z) = level_config.random_position();
-    state.next_destination = Some(Vec2::new(x, z));
+    let own_location = q_own_location
+        .get(ctx.target_entity())
+        .expect("Own location not found");
+    let flee_from = state.player_location;
+    // Get direction away from threat
+    let away_dir = (own_location.translation.xz() - flee_from).normalize();
+
+    // Add random rotation between -1 and 1 radian
+    let random_angle = rand::random::<f32>() * 2.0 - 1.0;
+    let rotated_dir = Vec2::from_angle(random_angle).rotate(away_dir);
+
+    let flee_distance = rand::random::<f32>() * 100.0 + 50.0;
+    let new_location = own_location.translation.xz() + rotated_dir * flee_distance;
+
+    // clamp to level bounds
+    let new_location = Vec2::new(
+        new_location
+            .x
+            .clamp(-level_config.width, level_config.width),
+        new_location
+            .y
+            .clamp(-level_config.height, level_config.height),
+    );
+
+    state.next_destination = Some(new_location);
+
+    // let (x, z) = level_config.random_position();
+    // state.next_destination = Some(Vec2::new(x, z));
     commands.trigger(ctx.success());
 }
 
@@ -239,9 +308,10 @@ fn decorate_dudes(
     if !q.contains(t.entity()) {
         return;
     }
-    commands
+    let htn_sup = commands
         .entity(t.entity())
         .spawn_htn_supervisor(htns.dude.clone(), &GameState::default());
+    commands.trigger_targets(ReplanRequest, htn_sup);
 }
 
 fn on_htn_loaded(
@@ -298,6 +368,7 @@ fn move_to_system(
     }
 }
 
+// spin around to celebrate
 // we rely on BehaveTimeout, a required component of SpinOperator, to trigger success of this behaviour.
 fn spin_system(
     q_behave: Query<(&BehaveCtx, &SpinOperator)>,
@@ -307,6 +378,24 @@ fn spin_system(
     for (ctx, _spin) in q_behave.iter() {
         let mut dude_transform = q_dude.get_mut(ctx.target_entity()).expect("Dude not found");
         dude_transform.rotation = Quat::from_rotation_y(time.elapsed_secs() * 10.0);
+    }
+}
+// while cowering, we turn our back to the player
+// we rely on BehaveTimeout, a required component of CowerOperator, to trigger success of this behaviour.
+fn cower_system(
+    q_behave: Query<(&BehaveCtx, &CowerOperator)>,
+    mut q_dude: Query<&mut Transform, (Without<Player>, With<Dude>)>,
+    q_player: Query<&Transform, With<Player>>,
+) {
+    let player_trans = q_player.single();
+    let look_target = player_trans.translation.xz();
+    for (ctx, _cower) in q_behave.iter() {
+        let mut transform = q_dude.get_mut(ctx.target_entity()).expect("Dude not found");
+        let target_position = Vec3::new(look_target.x, transform.translation.y, look_target.y);
+        let direction = target_position - transform.translation;
+        // face away from the player
+        let desired_rotation = Quat::from_rotation_arc(Vec3::Z, -direction.normalize());
+        transform.rotation = desired_rotation;
     }
 }
 

@@ -3,22 +3,24 @@ schema {
 }
 
 compound_task "BeDude" {
+    method "Main scared task" {
+        subtasks: [IsScared]
+    }
     method "Scared by player proximity" {
         preconditions: [mood == Mood::Normal, proximity_alert == true]
         subtasks: [
-            PrepareToFlee,
             BecomeScared,
-            MoveToNextDestination,
+            BeDude,
         ]
     }
     method "Celebration" {
-        preconditions: [mood == Mood::Normal, coins_collected >= 3]
+        preconditions: [coins_collected >= 3]
         subtasks: [
             Celebrate
         ]
     }
     method "Relaxed and wandering" {
-        preconditions: [mood == Mood::Normal, coin_location == None]
+        preconditions: [coin_location == None]
         subtasks: [
             PickDestination,
             MoveToNextDestination,
@@ -26,16 +28,29 @@ compound_task "BeDude" {
         ]
     }
     method "Chasing a coin" {
-        preconditions: [mood == Mood::Normal, coin_location != None]
+        //preconditions: [coin_location != None]
         subtasks: [
             MoveToCoin,
+            Pause,
         ]
     }
-    method "Cowering" {
-        preconditions: [mood == Mood::Scared]
+    method "Pause and go again" {
+        subtasks: [Pause, BeDude]
+    }
+}
+
+compound_task "IsScared" {
+    method "Become Scared" {
+        preconditions: [mood == Mood::Scared, proximity_alert == true]
         subtasks: [
-            Cower
+            PrepareToFlee,
+            MoveToNextDestination,
+            IsScared,
         ]
+    }
+    method "Cowering scared" {
+        preconditions: [mood == Mood::Scared]
+        subtasks: [Cower]
     }
 }
 
@@ -45,10 +60,15 @@ primitive_task "Chill" {
 
 primitive_task "BecomeScared" {
     operator: BecomeScaredOperator
+    effects: [mood = Mood::Scared]
 }
 
 primitive_task "Cower" {
     preconditions: [mood == Mood::Scared]
+    operator: CowerOperator
+}
+
+primitive_task "Pause" {
     operator: WaitOperator
 }
 
@@ -69,8 +89,8 @@ primitive_task "PickDestination" {
 }
 
 primitive_task "MoveToNextDestination" {
-    // preconditions: [next_destination != None]
     operator: MoveToOperator(next_destination)
+    expected_effects: [proximity_alert = false]
 }
 
 primitive_task "MoveToCoin" {

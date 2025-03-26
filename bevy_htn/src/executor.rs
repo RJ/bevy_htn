@@ -201,7 +201,7 @@ fn on_plan_added(t: Trigger<OnInsert, Plan>, mut commands: Commands, q: Query<&P
 
 fn on_task_complete<T: HtnStateTrait>(
     t: Trigger<TaskComplete>,
-    mut q: Query<(&mut Plan, &HtnSupervisor<T>, &mut T)>,
+    mut q: Query<(&mut Plan, &HtnSupervisor<T>, &mut T, &Parent)>,
     assets: Res<Assets<HtnAsset<T>>>,
     atr: Res<AppTypeRegistry>,
     mut commands: Commands,
@@ -209,20 +209,36 @@ fn on_task_complete<T: HtnStateTrait>(
     info!("Task complete event: {}", t.event().task_id.name());
     let TaskComplete { task_id, success } = t.event();
     let sup_entity = t.entity();
-    let Ok((mut plan, htn_sup, mut state)) = q.get_mut(sup_entity) else {
+    let Ok((mut plan, htn_sup, mut state, parent)) = q.get_mut(sup_entity) else {
         error!("HtnSupervisor {sup_entity:?} not found");
         return;
     };
+    let character_entity = parent.get();
     if plan.id() != task_id.plan_id() {
         warn!("Task {task_id:?} is from a different plan, ignoring result");
         return;
     }
     let htn = &assets.get(htn_sup.htn_handle.id()).unwrap().htn;
-    let Some(task) = htn.get_task_by_name(task_id.name()) else {
+    let task_name = task_id.name();
+    let Some(task) = htn.get_task_by_name(task_name) else {
         error!("Task {task_id:?} not found");
         return;
     };
     plan.report_task_completion(task_id, *success);
+
+    if *success {
+        info!("Task {task_name} completed successfully -> {character_entity:?}");
+        commands.trigger_targets(
+            HtnTaskEvent::Success(task_name.to_string()),
+            character_entity,
+        );
+    } else {
+        commands.trigger_targets(
+            HtnTaskEvent::Failure(task_name.to_string()),
+            character_entity,
+        );
+    }
+
     if *success {
         match task {
             Task::Primitive(primitive) => {
@@ -294,7 +310,8 @@ fn on_exec_next_task<T: HtnStateTrait>(
     let task_strategy = task.execution_command(state, &type_registry.read(), &task_id);
     match task_strategy {
         TaskExecutionStrategy::BehaviourTree { tree, task_id } => {
-            warn!("Executing operator: {}", task_id.name());
+            let task_name = task_id.name().to_string();
+            // warn!("Executing operator: {task_name}");
             let character_entity = parent.get();
             commands
                 .spawn((
@@ -304,8 +321,17 @@ fn on_exec_next_task<T: HtnStateTrait>(
                     BehaveSupervisorEntity(t.entity()),
                 ))
                 .set_parent(t.entity());
+            commands.trigger_targets(HtnTaskEvent::Executing(task_name), character_entity);
         }
     }
+}
+
+/// Event triggered on character entity when a task starts or completes.
+#[derive(Event, Debug, Clone, Reflect)]
+pub enum HtnTaskEvent {
+    Executing(String),
+    Success(String),
+    Failure(String),
 }
 
 #[derive(Event)]
