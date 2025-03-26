@@ -15,7 +15,6 @@ thiserror.workspace = true
 bevy_htn_macros.workspace = true
 bevy_behave.workspace = true
 rand.workspace = true
-float_eq.workspace = true
 
 [dev-dependencies]
 bevy = {workspace = true, default-features = true}

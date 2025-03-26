@@ -3,9 +3,9 @@ resolver = "2"
 members = ["bevy_htn_macros", "bevy_htn"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Richard Jones <rj@metabrew.com>"]
-publish = false
+publish = true
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
@@ -38,7 +38,6 @@ bevy-inspector-egui = "0.29"
 bevy_pancam = {version = "0.16.0", features = ["bevy_egui"]}
 bevy_behave = "0.2.2"
 rand = "0.9.0"
-float_eq = {version = "1.0.1", features = ["derive"]}
 
 [patch.crates-io]
 bevy_behave = { path = "../bevy_behave" }

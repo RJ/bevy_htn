@@ -5,6 +5,9 @@ operators, and can hot reload the `.htn` definition via the asset server.
 
 Check out the [characters example](https://github.com/RJ/bevy_htn/blob/main/bevy_htn/examples/characters/main.rs), and the accompanying [.htn file](https://github.com/RJ/bevy_htn/blob/main/bevy_htn/assets/dude.htn) that describes the bot behaviour.
 
+```bash
+cargo run -p bevy_htn --example characters
+```
 
 <img src="https://github.com/RJ/bevy_htn/blob/main/media/characters.png">
 
@@ -13,10 +16,12 @@ RJ in bevy #ai discord.
 ### Work in progress
 
 I'm still building this, so expect poor docs and logspam for the time being.
-My behaviour tree crate [bevy_behave](https://github.com/RJ/bevy_behave) is in a more production-ready state, and is what the HTN operators are made from.
+[bevy_behave](https://github.com/RJ/bevy_behave) is in a more production-ready state, and is what the HTN operators are made from.
+
+
+#### Pasted from tests.rs:
 
 ```rust
-
 #[test]
 fn test_travel_htn() {
     {
@@ -185,7 +190,7 @@ Operators are [bevy_behave](https://github.com/RJ/bevy_behave) behaviour trees.
 
 # .htn Capabilities
 
-* ..
+Need to document. see [htn.pest](https://github.com/RJ/bevy_htn/blob/main/bevy_htn/src/htn.pest) for the grammar.
 
 ## FAQ
 
