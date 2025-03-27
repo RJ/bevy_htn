@@ -35,25 +35,23 @@ op_lt  = {"<"}
 op_eq  = {"=="}
 op_neq = {"!="}
 
-// effect_operator = _{ op_assign | op_assign_inc | op_assign_dec }
-//op_assign = {"="}
-//op_assign_inc = {"+="}
-//op_assign_dec = {"-="}
-
 op_is  = {"is"}
 
-//optcond_none = @{ "None" }
-//optcond_some = @{ "Some" }
-//optcond_val = _{ optcond_none | optcond_some }
-
-//option_condition = { identifier ~ op_is ~ optcond_val }
-
-effect     = { set_effect_literal | set_effect_identifier | set_effect_inc_literal | set_effect_dec_literal }
+effect     = { 
+    set_effect_literal | 
+    set_effect_identifier | 
+    set_effect_inc_literal | 
+    set_effect_dec_literal |
+    set_effect_inc_identifier | 
+    set_effect_dec_identifier 
+    }
 
 set_effect_literal = { identifier ~ "=" ~ value }
 set_effect_identifier = { identifier ~ "=" ~ identifier }
 set_effect_inc_literal = { identifier ~ "+=" ~ value }
 set_effect_dec_literal = { identifier ~ "-=" ~ value }
+set_effect_inc_identifier = { identifier ~ "+=" ~ identifier }
+set_effect_dec_identifier = { identifier ~ "-=" ~ identifier }
 
 identifier = @{ (ASCII_ALPHANUMERIC | "_")+ }
 

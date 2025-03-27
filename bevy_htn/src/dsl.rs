@@ -214,6 +214,18 @@ fn parse_effect(pair: Pair<Rule>) -> Result<Effect, HtnErr> {
             by: -parse_i32(val_str, &syntax)?,
             syntax,
         },
+        (Rule::set_effect_inc_identifier, Rule::identifier) => Effect::IncrementIdentifier {
+            field,
+            field_source: val_str.to_string(),
+            decrement: false,
+            syntax,
+        },
+        (Rule::set_effect_dec_identifier, Rule::identifier) => Effect::IncrementIdentifier {
+            field,
+            field_source: val_str.to_string(),
+            decrement: true,
+            syntax,
+        },
         _ => {
             return Err(HtnErr::Effect {
                 syntax: syntax.clone(),

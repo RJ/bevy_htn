@@ -50,6 +50,12 @@ pub enum Effect {
         by: f32,
         syntax: String,
     },
+    IncrementIdentifier {
+        field: String,
+        field_source: String,
+        decrement: bool,
+        syntax: String,
+    },
     SetEnum {
         field: String,
         enum_type: String,
@@ -69,6 +75,7 @@ impl Effect {
             Effect::SetInt { syntax, .. } => syntax,
             Effect::SetIdentifier { syntax, .. } => syntax,
             Effect::IncrementInt { syntax, .. } => syntax,
+            Effect::IncrementIdentifier { syntax, .. } => syntax,
             Effect::SetEnum { syntax, .. } => syntax,
             Effect::SetNone { syntax, .. } => syntax,
             Effect::SetFloat { syntax, .. } => syntax,
@@ -118,6 +125,38 @@ impl Effect {
                         details: format!("Unknown state field `{field}` for {effect_noun}"),
                     });
                 };
+            }
+            // increment field by another field
+            Effect::IncrementIdentifier {
+                field,
+                field_source,
+                syntax,
+                ..
+            } => {
+                let Some(field_val) = reflected.field(field) else {
+                    return Err(HtnErr::Condition {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field}` for {effect_noun}"),
+                    });
+                };
+                let Some(field_src_val) = reflected.field(field_source) else {
+                    return Err(HtnErr::Condition {
+                        syntax: syntax.clone(),
+                        details: format!("Unknown state field `{field_source}` for {effect_noun}"),
+                    });
+                };
+                // reflected fields known to exist due to above code, so unwrap:
+                let field_type = field_val.get_represented_type_info().unwrap().type_id();
+                let field_src_type = field_src_val.get_represented_type_info().unwrap().type_id();
+
+                if field_type != field_src_type {
+                    return Err(HtnErr::Condition {
+                         syntax: syntax.clone(),
+                         details: format!(
+                             "An {effect_noun} is trying to +/- '{field}' to '{field_source}' but they are different types"
+                         ),
+                     });
+                }
             }
             // set a field to the value of another field
             Effect::SetIdentifier {
@@ -228,6 +267,7 @@ impl Effect {
         Ok(())
     }
 
+    /// We should have verified the effect will work, so it's ok to panic in here?
     pub fn apply<T: HtnStateTrait>(&self, state: &mut T, atr: &AppTypeRegistry) {
         let reflected = state
             .reflect_mut()
@@ -277,6 +317,54 @@ impl Effect {
                     }
                 } else {
                     panic!("Field {field} does not exist in the state");
+                }
+            }
+            Effect::IncrementIdentifier {
+                field,
+                field_source,
+                decrement,
+                ..
+            } => {
+                let Some(newval) = reflected.field(field_source) else {
+                    panic!("Field {field_source} does not exist in the state");
+                };
+                let newval = newval.clone_value();
+                let Some(val) = reflected.field_mut(field) else {
+                    panic!("Field {field} does not exist in the state");
+                };
+                fn try_inc<T: std::ops::AddAssign + std::ops::SubAssign + Copy + 'static>(
+                    val: &mut dyn PartialReflect,
+                    decrement: bool,
+                    newval: &dyn PartialReflect,
+                ) -> bool {
+                    if let (Some(f), Some(f2)) =
+                        (val.try_downcast_mut::<T>(), newval.try_downcast_ref::<T>())
+                    {
+                        if decrement {
+                            *f -= *f2;
+                        } else {
+                            *f += *f2;
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                }
+                let ok = try_inc::<i32>(val, *decrement, newval.as_ref())
+                    || try_inc::<u32>(val, *decrement, newval.as_ref())
+                    || try_inc::<usize>(val, *decrement, newval.as_ref())
+                    || try_inc::<i8>(val, *decrement, newval.as_ref())
+                    || try_inc::<i16>(val, *decrement, newval.as_ref())
+                    || try_inc::<i64>(val, *decrement, newval.as_ref())
+                    || try_inc::<i128>(val, *decrement, newval.as_ref())
+                    || try_inc::<f32>(val, *decrement, newval.as_ref())
+                    || try_inc::<f64>(val, *decrement, newval.as_ref())
+                    || try_inc::<u8>(val, *decrement, newval.as_ref())
+                    || try_inc::<u16>(val, *decrement, newval.as_ref())
+                    || try_inc::<u64>(val, *decrement, newval.as_ref())
+                    || try_inc::<u128>(val, *decrement, newval.as_ref());
+                if !ok {
+                    panic!("Field {field_source} cannot be applied to {field}");
                 }
             }
             Effect::SetIdentifier {
@@ -391,6 +479,7 @@ mod tests {
             location = Location::Park,
             floatyness = 2.0,
             opt = None,
+            energy += e1,
         ]
     }
     "#;
@@ -442,6 +531,12 @@ mod tests {
                 Effect::SetNone {
                     field: "opt".to_string(),
                     syntax: "opt = None".to_string(),
+                },
+                Effect::IncrementIdentifier {
+                    field: "energy".to_string(),
+                    field_source: "e1".to_string(),
+                    decrement: false,
+                    syntax: "energy += e1".to_string(),
                 },
             ]
         );
@@ -502,6 +597,26 @@ mod tests {
         };
         effect.apply(&mut state, &atr);
         assert_eq!(state.energy, 20);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::IncrementIdentifier {
+            field: "energy".to_string(),
+            field_source: "e1".to_string(),
+            decrement: false,
+            syntax: "energy += e1".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.energy, 11);
+
+        let mut state = initial_state.clone();
+        let effect = Effect::IncrementIdentifier {
+            field: "energy".to_string(),
+            field_source: "e1".to_string(),
+            decrement: true,
+            syntax: "energy -= e1".to_string(),
+        };
+        effect.apply(&mut state, &atr);
+        assert_eq!(state.energy, 9);
 
         let mut state = initial_state.clone();
         let effect = Effect::IncrementInt {
